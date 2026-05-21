@@ -25,11 +25,26 @@ class WindowsCliTests(unittest.TestCase):
     def test_leaves_non_claude_command_unchanged(self) -> None:
         self.assertEqual(_claude_command(["python", "--version"]), ["python", "--version"])
 
+    def test_prepends_claude_when_args_start_with_option(self) -> None:
+        with patch("ccproxy.cli._find_claude", return_value="claude"):
+            self.assertEqual(
+                _claude_command(["--", "-p", "reply ccproxy-ok"]),
+                ["claude", "--bare", "-p", "reply ccproxy-ok"],
+            )
+
 
 class ClaudeEnvironmentTests(unittest.TestCase):
     def test_build_claude_env_sets_required_auth_vars(self) -> None:
         env = build_claude_env("http://127.0.0.1:8082", {"PATH": "x"})
         self.assertEqual(env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:8082")
+        self.assertEqual(env["ANTHROPIC_API_KEY"], "ccproxy")
+        self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "ccproxy")
+
+    def test_build_claude_env_overrides_existing_anthropic_auth(self) -> None:
+        env = build_claude_env(
+            "http://127.0.0.1:8082",
+            {"ANTHROPIC_API_KEY": "real-key", "ANTHROPIC_AUTH_TOKEN": "real-token"},
+        )
         self.assertEqual(env["ANTHROPIC_API_KEY"], "ccproxy")
         self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "ccproxy")
 

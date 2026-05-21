@@ -1,13 +1,22 @@
 # claude-code-proxy
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 ![claude-code-proxy hero](docs/assets/claude-code-proxy-hero.png)
 
-`claude-code-proxy` lets Claude Code CLI talk to providers that expose OpenAI
-or Anthropic-compatible APIs. The local command is `ccproxy`.
+`claude-code-proxy` lets Claude Code CLI use OpenAI-compatible or
+Anthropic-compatible providers through one local command: `ccproxy`.
 
-Use it when you want Claude Code as the coding interface, but you want to choose
-the backend from profiles such as OpenAI API, ChatGPT local adapter, Kimi,
-Zhipu GLM, MiniMax, or a custom adapter.
+The normal workflow is command-first:
+
+```cmd
+ccproxy model set
+ccproxy run -- -p "reply ccproxy-ok"
+```
+
+`ccproxy model set` asks you to choose a provider, then asks you to choose a
+model. You can pick a configured model or type any upstream model name, such as
+`ChatGPT5.5`, `ChatGPT5.4`, or a model exposed by your own adapter.
 
 ```mermaid
 flowchart LR
@@ -19,54 +28,9 @@ flowchart LR
   Proxy --> MiniMax["MiniMax"]
 ```
 
-## 30-second Windows start
-
-```cmd
-cd /d C:\path\to\claude-code-proxy
-scripts\ccproxy-switch.cmd openai-key
-scripts\ccproxy-current.cmd
-scripts\ccproxy-run.cmd
-```
-
-Set the matching key first:
-
-```powershell
-$env:OPENAI_API_KEY="your-openai-api-key"
-```
-
-## Switch providers
-
-```cmd
-scripts\ccproxy-switch.cmd openai-key
-scripts\ccproxy-switch.cmd chatgpt-subscription
-scripts\ccproxy-switch.cmd kimi
-scripts\ccproxy-switch.cmd zhipu
-scripts\ccproxy-switch.cmd minimax-cn
-```
-
-Then run through the active provider:
-
-```cmd
-scripts\ccproxy-current.cmd
-scripts\ccproxy-run.cmd -p "reply ccproxy-ok"
-```
-
-## macOS / WSL / Linux
-
-```sh
-scripts/ccproxy-switch.sh openai-key
-scripts/ccproxy-run.sh
-```
-
-For installed package usage without repository scripts:
-
-```sh
-ccproxy use openai-key
-ccproxy current
-ccproxy run -- claude --bare --model sonnet
-```
-
 ## Install
+
+Requires Python 3.11+ and Claude Code CLI.
 
 From GitHub:
 
@@ -80,10 +44,85 @@ From a cloned checkout:
 python -m pip install -e .
 ```
 
-The default runtime path uses only the Python standard library. Optional FastAPI
-serving is available if you install `fastapi` and `uvicorn`.
+Check the command:
 
-## Profiles
+```sh
+ccproxy --version
+```
+
+If `ccproxy` is not on `PATH`, use the module form:
+
+```sh
+python -m ccproxy --version
+python -m ccproxy model set
+```
+
+## Windows Quick Start
+
+PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY="your-openai-api-key"
+ccproxy model set
+ccproxy model current
+ccproxy run -- -p "reply ccproxy-ok"
+```
+
+CMD:
+
+```cmd
+set OPENAI_API_KEY=your-openai-api-key
+ccproxy model set
+ccproxy model current
+ccproxy run -- -p "reply ccproxy-ok"
+```
+
+If PowerShell blocks `claude.ps1`, `ccproxy run` automatically prefers the npm
+`claude.cmd` shim on Windows.
+
+## ChatGPT Subscription Adapter
+
+`chatgpt-subscription` means "route Claude Code to a local adapter that you
+run". It does not log in to ChatGPT, read browser cookies, or turn a ChatGPT
+Plus/Pro/Team subscription into an OpenAI API key.
+
+Run your adapter first. By default, `ccproxy` expects:
+
+```text
+http://127.0.0.1:8000/v1/chat/completions
+```
+
+Then choose provider and model:
+
+```cmd
+set CHATGPT_ADAPTER_API_KEY=ccproxy
+ccproxy model set
+ccproxy run -- -p "reply ccproxy-ok"
+```
+
+When prompted, choose `chatgpt-subscription`, then type the model name your
+adapter understands, for example `ChatGPT5.5`.
+
+Non-interactive form:
+
+```cmd
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
+ccproxy run -- -p "reply ccproxy-ok"
+```
+
+## macOS / WSL / Linux
+
+```sh
+export OPENAI_API_KEY="your-openai-api-key"
+ccproxy model set
+ccproxy run -- -p "reply ccproxy-ok"
+```
+
+For WSL, keep Claude Code, `ccproxy`, and any local adapter in the same
+environment when possible. If your adapter runs on Windows and `ccproxy` runs
+inside WSL, edit the profile `base_url` to an address reachable from WSL.
+
+## Provider Profiles
 
 | Mode | Profile | Key env | Notes |
 | --- | --- | --- | --- |
@@ -97,46 +136,46 @@ serving is available if you install `fastapi` and `uvicorn`.
 | MiniMax Anthropic Global | `minimax-global-anthropic` | `MINIMAX_API_KEY` | Anthropic-compatible passthrough |
 | Custom adapter | `custom` | `CCPROXY_CUSTOM_API_KEY` | Local OpenAI-compatible adapter |
 
-`ccproxy use <profile>` writes only the active profile name to
-`~/.ccproxy/active.toml`. API keys stay in environment variables.
+## Model Commands
 
-## Subscription account boundary
+Interactive:
 
-`chatgpt-subscription` means "route Claude Code to a local adapter that you run".
-It does not mean this project logs into ChatGPT, reads browser cookies, or
-turns a ChatGPT Plus/Pro/Team plan into an OpenAI API key.
-
-The same rule applies to Kimi, GLM, MiniMax, and other subscription-backed
-accounts. If you want to use a subscription account, run a local adapter that
-exposes OpenAI-compatible `/v1/chat/completions`, then point a profile at it.
-
-## Windows ChatGPT adapter helper
-
-If your adapter listens on `http://127.0.0.1:8000/v1`, use:
-
-```cmd
-scripts\ccproxy-switch.cmd chatgpt-subscription
-scripts\ccproxy-run.cmd -p "reply ccproxy-ok"
+```sh
+ccproxy model set
 ```
 
-The older one-shot PowerShell helper is still available:
+Non-interactive:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 -Prompt "reply ccproxy-ok"
+```sh
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
+ccproxy model current
+ccproxy model clear
 ```
 
-It adds Claude Code's `--bare` flag by default so Claude Code uses the local
-proxy instead of showing the login-method selector.
+One-off override without saving:
 
-## Claude Code environment
+```sh
+ccproxy run --upstream-model ChatGPT5.4 -- -p "reply ccproxy-ok"
+```
 
-When `ccproxy run` starts Claude Code, it sets:
+State files:
+
+- `~/.ccproxy/active.toml`: active provider profile
+- `~/.ccproxy/models.toml`: active upstream model per provider
+
+Neither file stores API keys.
+
+## Claude Code Environment
+
+When `ccproxy run` starts Claude Code, it sets these child-process variables:
 
 ```text
 ANTHROPIC_BASE_URL=http://127.0.0.1:8082
 ANTHROPIC_API_KEY=ccproxy
 ANTHROPIC_AUTH_TOKEN=ccproxy
 ```
+
+This prevents an existing real Anthropic key from leaking into a proxy run.
 
 Two-terminal mode is also supported:
 
@@ -147,34 +186,35 @@ ccproxy serve --profile openai-key
 Then run Claude Code with the same endpoint:
 
 ```sh
-ANTHROPIC_BASE_URL=http://127.0.0.1:8082 ANTHROPIC_API_KEY=ccproxy claude --bare
+ANTHROPIC_BASE_URL=http://127.0.0.1:8082 ANTHROPIC_API_KEY=ccproxy ANTHROPIC_AUTH_TOKEN=ccproxy claude --bare
 ```
 
-On Windows, prefer the npm `.cmd` shim when checking Claude Code:
+## Smoke Tests
+
+Local translator test:
+
+```sh
+ccproxy test
+```
+
+Real Claude Code smoke test:
+
+```sh
+ccproxy test --profile custom --claude
+```
+
+The real Claude smoke test launches Claude Code and sends `reply ccproxy-ok`.
+It requires a real provider or a running local adapter for the chosen profile.
+
+For a local fake adapter from a cloned checkout:
 
 ```cmd
-cmd.exe /d /s /c claude --version
+python scripts\mock_openai_provider.py --port 8000
+ccproxy model set --provider custom --model custom-big
+ccproxy test --profile custom --claude
 ```
 
-## Verified on Windows
-
-The project is verified with Claude Code CLI on Windows using:
-
-```cmd
-cmd.exe /d /s /c claude --version
-scripts\ccproxy-smoke.cmd
-```
-
-The smoke command requires a real active provider or a local adapter. For a
-local fake adapter test:
-
-```cmd
-scripts\mock-adapter.cmd
-scripts\ccproxy-switch.cmd custom
-scripts\ccproxy-smoke.cmd
-```
-
-Expected model output:
+Expected output:
 
 ```text
 ccproxy-ok
@@ -226,13 +266,12 @@ python -m unittest discover -s tests
 python -m compileall -q src tests scripts
 ```
 
-## Limitations
+Optional FastAPI mode:
 
-- Subscription profiles need an adapter. This project does not automate browser
-  login or cookie/session extraction.
-- Provider model names change over time. Edit `~/.ccproxy/config.toml` if your
-  provider uses newer IDs.
-- Real provider tests require the matching environment variable to be set.
+```sh
+python -m pip install ".[server]"
+ccproxy serve --fastapi
+```
 
 ## License
 

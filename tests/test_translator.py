@@ -12,6 +12,22 @@ class TranslatorTests(unittest.TestCase):
         self.assertEqual(select_model("claude-3-5-sonnet-latest", profile), "MiniMax-M2.7-highspeed")
         self.assertEqual(select_model("claude-3-haiku-latest", profile), "MiniMax-M2.5")
 
+    def test_active_upstream_model_overrides_mapping(self) -> None:
+        profile = PRESETS["chatgpt-subscription"].with_upstream_model("ChatGPT5.5")
+        self.assertEqual(select_model("claude-3-5-sonnet-latest", profile), "ChatGPT5.5")
+
+    def test_custom_alias_maps_before_heuristics(self) -> None:
+        profile = PRESETS["chatgpt-subscription"].with_upstream_model(None)
+        profile = profile.__class__(
+            name=profile.name,
+            type=profile.type,
+            base_url=profile.base_url,
+            api_key_env=profile.api_key_env,
+            models={"big": "fallback-big", "thinking": "ChatGPT5.5", "openrouter/qwen3-coder:free": "qwen3"},
+        )
+        self.assertEqual(select_model("thinking", profile), "ChatGPT5.5")
+        self.assertEqual(select_model("openrouter/qwen3-coder:free", profile), "qwen3")
+
     def test_anthropic_text_and_tool_to_openai(self) -> None:
         profile = PRESETS["openai"]
         payload = anthropic_to_openai(

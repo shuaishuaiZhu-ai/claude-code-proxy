@@ -26,6 +26,8 @@ api_key_env = "CHATGPT_ADAPTER_API_KEY"
 big = "chatgpt-big"
 middle = "chatgpt-middle"
 small = "chatgpt-small"
+"ChatGPT5.5" = "ChatGPT5.5"
+"ChatGPT5.4" = "ChatGPT5.4"
 
 [profiles.kimi]
 type = "openai-compatible"

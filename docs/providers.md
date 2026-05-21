@@ -18,28 +18,31 @@ variables; config files only contain endpoint, model, and env-var names.
 | `minimax-global-anthropic` | `anthropic-compatible` | `https://api.minimax.io/anthropic` | `MINIMAX_API_KEY` |
 | `custom` | `external-adapter` | `http://127.0.0.1:8000/v1` | `CCPROXY_CUSTOM_API_KEY` |
 
-## Switching
+## Command-First Selection
 
-Windows:
-
-```cmd
-scripts\ccproxy-switch.cmd openai-key
-scripts\ccproxy-run.cmd
-scripts\ccproxy-switch.cmd chatgpt-subscription
-scripts\ccproxy-run.cmd
-```
-
-macOS / WSL / Linux:
+Use the same commands on Windows, macOS, WSL, and Linux:
 
 ```sh
-scripts/ccproxy-switch.sh openai-key
-scripts/ccproxy-run.sh
-scripts/ccproxy-switch.sh chatgpt-subscription
-scripts/ccproxy-run.sh
+ccproxy model set
+ccproxy model current
+ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-The active profile is stored at `~/.ccproxy/active.toml`. It contains only a
-profile name, never an API key.
+`ccproxy model set` asks for a provider first, then asks for a model. You can
+choose a configured alias such as `big`, `middle`, or `small`, or type any
+custom upstream model name.
+
+Non-interactive examples:
+
+```sh
+ccproxy model set --provider openai-key --model gpt-4.1
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
+ccproxy model set --provider kimi --model moonshot-v1-128k
+```
+
+The active profile is stored at `~/.ccproxy/active.toml`. Active model choices
+are stored per provider at `~/.ccproxy/models.toml`. Neither file stores API
+keys.
 
 ## Subscription Boundary
 
