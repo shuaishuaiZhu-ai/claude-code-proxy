@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
 from typing import Sequence
 import argparse
 import importlib.util
@@ -16,7 +15,16 @@ import urllib.request
 
 from . import __version__
 from .client import UpstreamClient
-from .config import ServerConfig, load_config, select_profile, write_default_config
+from .config import (
+    ServerConfig,
+    active_profile_path,
+    load_active_profile,
+    load_config,
+    save_active_profile,
+    select_profile,
+    write_default_config,
+)
+from .env import build_claude_env, ensure_bare_args
 from .server import build_stdlib_server, serve_stdlib
 
 
@@ -35,6 +43,19 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--profile", default="openai-key", help="default profile to select")
     init_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     init_parser.set_defaults(func=cmd_init)
+
+    profiles_parser = subparsers.add_parser("profiles", help="list configured provider profiles")
+    profiles_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    profiles_parser.set_defaults(func=cmd_profiles)
+
+    current_parser = subparsers.add_parser("current", help="print active provider profile")
+    current_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    current_parser.set_defaults(func=cmd_current)
+
+    use_parser = subparsers.add_parser("use", help="set active provider profile")
+    use_parser.add_argument("profile", help="profile name to activate")
+    use_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    use_parser.set_defaults(func=cmd_use)
 
     serve_parser = subparsers.add_parser("serve", help="serve the local Anthropic-compatible proxy")
     add_common_config_args(serve_parser)
@@ -67,6 +88,33 @@ def add_common_config_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
 
 
+def cmd_profiles(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    active = load_active_profile(active_profile_path()) or config.default_profile
+    for name in sorted(config.profiles):
+        marker = "*" if name == active else " "
+        profile = config.profiles[name]
+        print(f"{marker} {name}\t{profile.type}\t{profile.api_key_env}\t{profile.base_url}")
+    return 0
+
+
+def cmd_current(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    active = load_active_profile(active_profile_path()) or config.default_profile
+    profile = select_profile(config, active)
+    print(f"{profile.name}\t{profile.type}\t{profile.base_url}")
+    return 0
+
+
+def cmd_use(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    profile = select_profile(config, args.profile)
+    path = save_active_profile(profile.name, active_profile_path())
+    print(f"active profile: {profile.name}")
+    print(f"state: {path}")
+    return 0
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     path = write_default_config(args.config, args.profile)
     print(f"wrote {path}")
@@ -76,7 +124,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 def cmd_serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    profile = select_profile(config, args.profile)
+    profile = select_profile(config, _resolve_profile_name(args.profile))
     server = _server_from_args(config.server, args)
     if args.fastapi:
         return _serve_fastapi(server, profile)
@@ -86,7 +134,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    profile = select_profile(config, args.profile)
+    profile = select_profile(config, _resolve_profile_name(args.profile))
     server = _server_from_args(config.server, args)
     httpd = build_stdlib_server(server, profile)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -94,10 +142,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     try:
         _wait_for_health(server)
         command = _claude_command(args.claude_args)
-        env = os.environ.copy()
-        env["ANTHROPIC_BASE_URL"] = f"http://{server.host}:{server.port}"
-        env.setdefault("ANTHROPIC_API_KEY", "ccproxy")
-        env.setdefault("ANTHROPIC_AUTH_TOKEN", env["ANTHROPIC_API_KEY"])
+        env = build_claude_env(f"http://{server.host}:{server.port}", os.environ)
         print(f"running through {env['ANTHROPIC_BASE_URL']} with profile {profile.name}")
         return subprocess.call(command, env=env)
     finally:
@@ -107,7 +152,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    profile = select_profile(config, args.profile)
+    profile = select_profile(config, _resolve_profile_name(args.profile))
     print(f"ccproxy: {__version__}")
     print(f"python: {sys.version.split()[0]}")
     print(f"platform: {platform.platform()}")
@@ -122,7 +167,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_test(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    profile = select_profile(config, args.profile)
+    profile = select_profile(config, _resolve_profile_name(args.profile))
     if args.real:
         if profile.api_key_env and not os.environ.get(profile.api_key_env):
             print(f"missing {profile.api_key_env}; refusing real provider test")
@@ -185,6 +230,12 @@ def _server_from_args(server: ServerConfig, args: argparse.Namespace) -> ServerC
     )
 
 
+def _resolve_profile_name(profile_name: str | None) -> str | None:
+    if profile_name:
+        return profile_name
+    return load_active_profile(active_profile_path())
+
+
 def _claude_command(raw_args: list[str]) -> list[str]:
     args = list(raw_args)
     if args and args[0] == "--":
@@ -193,12 +244,19 @@ def _claude_command(raw_args: list[str]) -> list[str]:
         if platform.system().lower() == "windows" and args[0].lower() == "claude":
             claude = _find_claude()
             if claude:
-                return [claude, *args[1:]]
+                return ensure_bare_args([claude, *args[1:]])
+        if _is_claude_executable(args[0]):
+            return ensure_bare_args(args)
         return args
     claude = _find_claude()
     if not claude:
         raise RuntimeError("Claude Code CLI was not found on PATH")
-    return [claude]
+    return ensure_bare_args([claude])
+
+
+def _is_claude_executable(command: str) -> bool:
+    name = command.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return name in {"claude", "claude.cmd"}
 
 
 def _find_claude() -> str | None:

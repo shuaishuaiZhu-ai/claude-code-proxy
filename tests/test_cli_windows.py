@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from ccproxy.cli import _claude_command
+from ccproxy.env import build_claude_env, ensure_bare_args
 
 
 class WindowsCliTests(unittest.TestCase):
@@ -10,8 +11,39 @@ class WindowsCliTests(unittest.TestCase):
             with patch("ccproxy.cli._find_claude", return_value="C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd"):
                 self.assertEqual(
                     _claude_command(["--", "claude", "-p", "ping"]),
-                    ["C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd", "-p", "ping"],
+                    ["C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd", "--bare", "-p", "ping"],
                 )
+
+    def test_does_not_duplicate_bare_mode(self) -> None:
+        with patch("ccproxy.cli.platform.system", return_value="Windows"):
+            with patch("ccproxy.cli._find_claude", return_value="C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd"):
+                self.assertEqual(
+                    _claude_command(["--", "claude", "--bare", "-p", "ping"]),
+                    ["C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd", "--bare", "-p", "ping"],
+                )
+
+    def test_leaves_non_claude_command_unchanged(self) -> None:
+        self.assertEqual(_claude_command(["python", "--version"]), ["python", "--version"])
+
+
+class ClaudeEnvironmentTests(unittest.TestCase):
+    def test_build_claude_env_sets_required_auth_vars(self) -> None:
+        env = build_claude_env("http://127.0.0.1:8082", {"PATH": "x"})
+        self.assertEqual(env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:8082")
+        self.assertEqual(env["ANTHROPIC_API_KEY"], "ccproxy")
+        self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "ccproxy")
+
+    def test_ensure_bare_args_inserts_after_claude(self) -> None:
+        self.assertEqual(
+            ensure_bare_args(["claude", "--model", "sonnet"]),
+            ["claude", "--bare", "--model", "sonnet"],
+        )
+
+    def test_ensure_bare_args_does_not_duplicate(self) -> None:
+        self.assertEqual(
+            ensure_bare_args(["claude", "--bare", "--model", "sonnet"]),
+            ["claude", "--bare", "--model", "sonnet"],
+        )
 
 
 if __name__ == "__main__":

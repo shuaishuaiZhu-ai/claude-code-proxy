@@ -9,6 +9,7 @@ import tomllib
 
 CONFIG_DIR = ".ccproxy"
 CONFIG_FILE = "config.toml"
+ACTIVE_PROFILE_FILE = "active.toml"
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,37 @@ class ProxyConfig:
 
 def default_config_path() -> Path:
     return Path.home() / CONFIG_DIR / CONFIG_FILE
+
+
+def active_profile_path() -> Path:
+    return Path.home() / CONFIG_DIR / ACTIVE_PROFILE_FILE
+
+
+def validate_profile_name(profile_name: str) -> str:
+    cleaned = profile_name.strip()
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+    if not cleaned or any(char not in allowed for char in cleaned):
+        raise ValueError(f"invalid profile name {profile_name!r}")
+    return cleaned
+
+
+def save_active_profile(profile_name: str, path: str | os.PathLike[str] | None = None) -> Path:
+    selected = validate_profile_name(profile_name)
+    state_path = Path(path) if path else active_profile_path()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(f'profile = "{selected}"\n', encoding="utf-8")
+    return state_path
+
+
+def load_active_profile(path: str | os.PathLike[str] | None = None) -> str | None:
+    state_path = Path(path) if path else active_profile_path()
+    if not state_path.exists():
+        return None
+    data = tomllib.loads(state_path.read_text(encoding="utf-8"))
+    profile = data.get("profile")
+    if not isinstance(profile, str):
+        return None
+    return validate_profile_name(profile)
 
 
 def provider_from_mapping(name: str, data: dict[str, Any]) -> ProviderProfile:
