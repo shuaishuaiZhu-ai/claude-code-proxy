@@ -7,6 +7,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from ccproxy.adapter import AdapterStatus, EndpointStatus
 from ccproxy.cli import _local_upstream_error, main
 from ccproxy.config import ProviderProfile
 
@@ -79,6 +80,30 @@ class CliTests(unittest.TestCase):
             self.assertTrue(config_path.exists())
             self.assertIn('default_profile = "chatgpt-subscription"', config_path.read_text(encoding="utf-8"))
             self.assertIn('profile = "chatgpt-subscription"', profile_path.read_text(encoding="utf-8"))
+
+    def test_doctor_reports_chatgpt_auth_and_callback_diagnostics(self) -> None:
+        status = AdapterStatus(
+            installed=True,
+            logged_in=False,
+            running=False,
+            url="http://127.0.0.1:8317",
+            repo=Path("C:/adapter"),
+            log=Path("C:/adapter/auth2api.log"),
+        )
+        endpoints = [
+            EndpointStatus("https://auth.openai.com/sign-in-with-chatgpt/codex/consent", 403, "cloudflare_challenge"),
+            EndpointStatus("https://chatgpt.com", 403, "cloudflare_challenge"),
+        ]
+        out = io.StringIO()
+        with patch("ccproxy.cli.chatgpt_adapter_status", return_value=status):
+            with patch("ccproxy.cli.codex_callback_port_busy", return_value=True):
+                with patch("ccproxy.cli.chatgpt_auth_endpoint_statuses", return_value=endpoints):
+                    with redirect_stdout(out):
+                        self.assertEqual(main(["doctor", "--profile", "chatgpt-subscription"]), 0)
+        text = out.getvalue()
+        self.assertIn("codex_callback_port_1455: busy", text)
+        self.assertIn("chatgpt_auth_https: https://auth.openai.com/sign-in-with-chatgpt/codex/consent HTTP 403 cloudflare_challenge", text)
+        self.assertIn("consent page may stay disabled before localhost callback", text)
 
 
 class ProfileCommandTests(unittest.TestCase):

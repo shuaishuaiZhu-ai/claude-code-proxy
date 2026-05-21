@@ -17,7 +17,14 @@ import urllib.request
 from urllib.parse import urlparse
 
 from . import __version__
-from .adapter import ManagedAdapterError, chatgpt_adapter_status, ensure_chatgpt_adapter
+from .adapter import (
+    CODEX_CALLBACK_PORT,
+    ManagedAdapterError,
+    chatgpt_adapter_status,
+    chatgpt_auth_endpoint_statuses,
+    codex_callback_port_busy,
+    ensure_chatgpt_adapter,
+)
 from .client import UpstreamClient
 from .config import (
     ProviderProfile,
@@ -426,6 +433,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"managed_adapter_running: {'yes' if status.running else 'no'}")
         print(f"managed_adapter_repo: {status.repo}")
         print(f"managed_adapter_log: {status.log}")
+        print(f"codex_callback_port_{CODEX_CALLBACK_PORT}: {'busy' if codex_callback_port_busy() else 'free'}")
+        auth_statuses = chatgpt_auth_endpoint_statuses()
+        for endpoint in auth_statuses:
+            status_text = f"HTTP {endpoint.status}" if endpoint.status is not None else "no_http_response"
+            print(f"chatgpt_auth_https: {endpoint.url} {status_text} {endpoint.issue}")
+        if any(endpoint.issue == "cloudflare_challenge" for endpoint in auth_statuses):
+            print("chatgpt_auth_hint: consent page may stay disabled before localhost callback; check browser profile, extensions, proxy, or VPN.")
     for package in ("fastapi", "uvicorn"):
         print(f"{package}: {'installed' if importlib.util.find_spec(package) else 'missing'}")
     return 0

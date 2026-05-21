@@ -7,12 +7,19 @@ import shutil
 import socket
 import subprocess
 import time
+import urllib.error
+import urllib.request
 
 
 AUTH2API_REPO = "https://github.com/AmazingAng/auth2api.git"
 AUTH2API_PORT = 8317
 AUTH2API_API_KEY = "ccproxy-local"
 CODEX_CALLBACK_PORT = 1455
+CHATGPT_AUTH_ENDPOINTS = (
+    "https://auth.openai.com/sign-in-with-chatgpt/codex/consent",
+    "https://auth.openai.com/oauth/authorize",
+    "https://chatgpt.com",
+)
 
 
 class ManagedAdapterError(RuntimeError):
@@ -36,6 +43,13 @@ class AdapterStatus:
     url: str
     repo: Path
     log: Path
+
+
+@dataclass(frozen=True)
+class EndpointStatus:
+    url: str
+    status: int | None
+    issue: str
 
 
 def default_adapter_paths() -> AdapterPaths:
@@ -75,6 +89,14 @@ def chatgpt_adapter_status() -> AdapterStatus:
         repo=paths.repo,
         log=paths.log,
     )
+
+
+def codex_callback_port_busy() -> bool:
+    return _is_port_in_use("127.0.0.1", CODEX_CALLBACK_PORT)
+
+
+def chatgpt_auth_endpoint_statuses(timeout: int = 5) -> list[EndpointStatus]:
+    return [_check_https_endpoint(url, timeout=timeout) for url in CHATGPT_AUTH_ENDPOINTS]
 
 
 def is_auth2api_running() -> bool:
@@ -131,7 +153,7 @@ debug: "errors"
 
 def _login_auth2api(paths: AdapterPaths, manual: bool = False) -> None:
     node = _node_command()
-    callback_port_busy = _is_port_in_use("127.0.0.1", CODEX_CALLBACK_PORT)
+    callback_port_busy = codex_callback_port_busy()
     use_manual = manual or callback_port_busy
     command = [node, "dist/index.js", "--login", "--provider=codex"]
     if use_manual:
@@ -143,6 +165,7 @@ def _login_auth2api(paths: AdapterPaths, manual: bool = False) -> None:
             "falling back to manual callback mode."
         )
     print("A browser login URL may open. Finish login, then return to this terminal.")
+    print("If the consent page stays disabled before redirecting to localhost, run: ccproxy doctor --profile chatgpt-subscription")
     _run_checked(command, cwd=paths.repo, action="ChatGPT subscription login")
 
 
@@ -187,6 +210,28 @@ def _run_checked(command: list[str], cwd: Path | None, action: str) -> None:
         raise ManagedAdapterError(f"{action} failed with exit code {exc.returncode}") from exc
     except OSError as exc:
         raise ManagedAdapterError(f"{action} failed: {exc}") from exc
+
+
+def _check_https_endpoint(url: str, timeout: int) -> EndpointStatus:
+    request = urllib.request.Request(url, method="GET", headers={"User-Agent": "ccproxy/doctor"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return EndpointStatus(url, response.status, _endpoint_issue(response.status, response.headers))
+    except urllib.error.HTTPError as exc:
+        return EndpointStatus(url, exc.code, _endpoint_issue(exc.code, exc.headers))
+    except (OSError, TimeoutError, urllib.error.URLError) as exc:
+        reason = getattr(exc, "reason", exc)
+        return EndpointStatus(url, None, f"network_error: {reason}")
+
+
+def _endpoint_issue(status: int, headers: object) -> str:
+    get = getattr(headers, "get", None)
+    mitigated = get("Cf-Mitigated", "") if get else ""
+    if str(mitigated).lower() == "challenge":
+        return "cloudflare_challenge"
+    if 200 <= status < 400:
+        return "ok"
+    return f"http_{status}"
 
 
 def _is_port_in_use(host: str, port: int) -> bool:

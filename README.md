@@ -268,6 +268,21 @@ save an unusable selection. For `custom`, you still own the adapter process. A
 plain `claude` command is not the same as `ccproxy run`; it starts normal Claude
 Code auth and may show `Not logged in`.
 
+If the browser stays on the "Sign in with ChatGPT to Codex" consent page, or the
+continue button stays unavailable, run:
+
+```sh
+ccproxy doctor --profile chatgpt-subscription
+```
+
+`chatgpt_auth_https: ... cloudflare_challenge` means the flow is blocked on the
+OpenAI/Codex web login step before any `localhost` callback happens, so the
+proxy has not received anything yet. Check browser extensions, privacy or ad
+blockers, and the system proxy or VPN. `codex_callback_port_1455: busy` is the
+next stage: after the page proceeds and redirects locally, `ccproxy` falls back
+to manual callback mode and asks you to paste the full callback URL from the
+browser address bar.
+
 If ChatGPT login exits with `EADDRINUSE` on `127.0.0.1:1455`, another process
 already owns the Codex OAuth callback port. Newer `ccproxy` builds detect this
 before login and fall back to auth2api manual callback mode; paste the full
