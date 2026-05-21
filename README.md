@@ -1,8 +1,8 @@
-# cc-provider-proxy
+# claude-code-proxy
 
-![cc-provider-proxy hero](docs/assets/ccproxy-hero.png)
+![claude-code-proxy hero](docs/assets/claude-code-proxy-hero.png)
 
-`cc-provider-proxy` is a local Claude Code proxy. It exposes an
+`claude-code-proxy` is a local Claude Code proxy. It exposes an
 Anthropic-compatible `/v1/messages` endpoint for Claude Code CLI, then routes
 the request to OpenAI-compatible or Anthropic-compatible model providers.
 
@@ -35,7 +35,7 @@ OpenAI-compatible `/v1/chat/completions` endpoint.
 From GitHub:
 
 ```bash
-python -m pip install git+https://github.com/shuaishuaiZhu-ai/cc-provider-proxy.git
+python -m pip install git+https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
 ```
 
 For local development from a cloned checkout:
@@ -48,7 +48,7 @@ The default install has no runtime third-party dependencies. The standard
 library server is used by default. Optional FastAPI mode is available with:
 
 ```bash
-python -m pip install "git+https://github.com/shuaishuaiZhu-ai/cc-provider-proxy.git"
+python -m pip install "git+https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git"
 python -m pip install fastapi uvicorn
 ```
 

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for improving `cc-provider-proxy`.
+Thanks for improving `claude-code-proxy`.
 
 ## Local Checks
 

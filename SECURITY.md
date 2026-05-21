@@ -1,6 +1,6 @@
 # Security Policy
 
-`cc-provider-proxy` is a local proxy. Treat provider credentials as sensitive.
+`claude-code-proxy` is a local proxy. Treat provider credentials as sensitive.
 
 ## Supported Boundary
 
