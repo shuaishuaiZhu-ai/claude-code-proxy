@@ -111,7 +111,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> ProxyConfig:
 def render_config(default_profile: str, profiles: dict[str, ProviderProfile], server: ServerConfig | None = None) -> str:
     active_server = server or ServerConfig()
     lines = [
-        "# cc-provider-proxy configuration",
+        "# claude-code-proxy configuration",
         "# Secrets are read from environment variables named by api_key_env.",
         f'default_profile = "{default_profile}"',
         "",

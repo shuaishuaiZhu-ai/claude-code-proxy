@@ -27,6 +27,26 @@ big = "chatgpt-big"
 middle = "chatgpt-middle"
 small = "chatgpt-small"
 
+[profiles.kimi]
+type = "openai-compatible"
+base_url = "https://api.moonshot.cn/v1"
+api_key_env = "KIMI_API_KEY"
+
+[profiles.kimi.models]
+big = "moonshot-v1-128k"
+middle = "moonshot-v1-32k"
+small = "moonshot-v1-8k"
+
+[profiles.zhipu]
+type = "openai-compatible"
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+api_key_env = "ZHIPU_API_KEY"
+
+[profiles.zhipu.models]
+big = "glm-4-plus"
+middle = "glm-4-air"
+small = "glm-4-flash"
+
 [profiles.minimax-cn]
 type = "openai-compatible"
 base_url = "https://api.minimaxi.com/v1"
@@ -36,3 +56,23 @@ api_key_env = "MINIMAX_API_KEY"
 big = "MiniMax-M2.7"
 middle = "MiniMax-M2.7-highspeed"
 small = "MiniMax-M2.5"
+
+[profiles.minimax-global]
+type = "openai-compatible"
+base_url = "https://api.minimax.io/v1"
+api_key_env = "MINIMAX_API_KEY"
+
+[profiles.minimax-global.models]
+big = "MiniMax-M2.7"
+middle = "MiniMax-M2.7-highspeed"
+small = "MiniMax-M2.5"
+
+[profiles.custom]
+type = "external-adapter"
+base_url = "http://127.0.0.1:8000/v1"
+api_key_env = "CCPROXY_CUSTOM_API_KEY"
+
+[profiles.custom.models]
+big = "custom-big"
+middle = "custom-middle"
+small = "custom-small"

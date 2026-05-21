@@ -12,6 +12,20 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(PRESETS["minimax-global"].base_url, "https://api.minimax.io/v1")
         self.assertEqual(PRESETS["minimax-cn-anthropic"].type, "anthropic-compatible")
 
+    def test_required_provider_profiles_exist(self) -> None:
+        required = {
+            "openai-key": "OPENAI_API_KEY",
+            "chatgpt-subscription": "CHATGPT_ADAPTER_API_KEY",
+            "kimi": "KIMI_API_KEY",
+            "zhipu": "ZHIPU_API_KEY",
+            "minimax-cn": "MINIMAX_API_KEY",
+            "minimax-global": "MINIMAX_API_KEY",
+        }
+        for name, env_name in required.items():
+            with self.subTest(name=name):
+                self.assertIn(name, PRESETS)
+                self.assertEqual(PRESETS[name].api_key_env, env_name)
+
     def test_write_and_load_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
