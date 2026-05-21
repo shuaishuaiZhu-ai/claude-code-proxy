@@ -15,9 +15,10 @@ ccproxy model set
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-`ccproxy init` 会写入配置、执行一次模型选择，并为所选 provider 准备需要的
-托管 adapter。之后可以用 `ccproxy model set` 随时切换 provider 和模型。模型
-可以从配置列表里选，也可以直接输入任意上游模型名，比如 `ChatGPT5.5`、
+`ccproxy init` 会写入配置、执行一次模型选择，并为所选 provider 做必要设置。
+之后可以用 `ccproxy model set` 随时切换 provider 和模型。如果 provider 还没
+配置好，`ccproxy` 会先打开对应的登录页或 API key 页面，再保存选择。模型可以
+从配置列表里选，也可以直接输入任意上游模型名，比如 `ChatGPT5.5`、
 `ChatGPT5.4` 或你自己的 adapter 暴露出来的模型名。
 
 ```mermaid
@@ -149,12 +150,30 @@ WSL 下建议让 Claude Code、`ccproxy` 和本地 adapter 都运行在同一个
 ccproxy model set
 ```
 
+执行顺序是：
+
+1. 选择 provider
+2. 如果 provider 未配置，先完成 provider 设置或登录
+3. 选择模型
+4. 保存当前 provider/model
+
+`chatgpt-subscription` 会在第 2 步执行托管 auth2api 登录和启动流程。
+`openai-key`、`kimi`、`zhipu`、`minimax-cn` 等 API key provider 会在缺少
+环境变量时打开对应控制台，并打印需要执行的环境变量命令。`ccproxy` 不会把
+API key 写入项目文件。
+
 非交互式：
 
 ```sh
 ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ccproxy model current
 ccproxy model clear
+```
+
+如果在无图形界面环境，或者不希望自动打开浏览器：
+
+```sh
+ccproxy model set --provider openai-key --model gpt-4.1 --no-open-login
 ```
 
 只覆盖本次运行，不保存：
@@ -223,9 +242,11 @@ ccproxy model current
 ```
 
 对于 `chatgpt-subscription`，运行 `ccproxy init` 或 `ccproxy model set`；这会
-安装 auth2api、启动 ChatGPT/Codex 登录流程，并启动本地 adapter。对于
-`custom`，adapter 进程仍然由你自己管理。直接运行 `claude` 不等于
-`ccproxy run`，它会进入 Claude Code 自己的登录流程，可能显示 `Not logged in`。
+安装 auth2api、启动 ChatGPT/Codex 登录流程，并启动本地 adapter。对于 API key
+provider，运行 `ccproxy model set`；如果缺少必要环境变量，它会打开对应设置页，
+并拒绝保存一个不可用的选择。对于 `custom`，adapter 进程仍然由你自己管理。
+直接运行 `claude` 不等于 `ccproxy run`，它会进入 Claude Code 自己的登录流程，
+可能显示 `Not logged in`。
 
 ## 配置
 

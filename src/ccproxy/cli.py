@@ -37,6 +37,7 @@ from .config import (
     write_default_config,
 )
 from .env import build_claude_env, ensure_bare_args
+from .provider_setup import open_provider_setup, provider_key_missing, provider_setup_message, setup_for_profile
 from .server import build_stdlib_server, serve_stdlib
 from .translator import select_model
 
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     init_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
     init_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    init_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     init_parser.add_argument("--skip-model-set", action="store_true", help="only write config; do not choose provider/model")
     init_parser.set_defaults(func=cmd_init)
 
@@ -74,6 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     use_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     use_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     use_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    use_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     use_parser.set_defaults(func=cmd_use)
 
     model_parser = subparsers.add_parser("model", help="choose provider and upstream model")
@@ -85,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     model_set_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     model_set_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
     model_set_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    model_set_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     model_set_parser.set_defaults(func=cmd_model_set)
 
     model_current_parser = model_subparsers.add_parser("current", help="print active provider and upstream model")
@@ -104,6 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--port", type=int)
     serve_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     serve_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    serve_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     serve_parser.add_argument("--fastapi", action="store_true", help="serve through FastAPI/uvicorn if installed")
     serve_parser.set_defaults(func=cmd_serve)
 
@@ -114,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--port", type=int)
     run_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     run_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    run_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     run_parser.add_argument("claude_args", nargs=argparse.REMAINDER)
     run_parser.set_defaults(func=cmd_run)
 
@@ -129,6 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
     test_parser.add_argument("--port", type=int)
     test_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     test_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    test_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     test_parser.add_argument("--real", action="store_true", help="call the configured real provider")
     test_parser.add_argument("--claude", action="store_true", help="run a real Claude Code CLI smoke test")
     test_parser.add_argument("--prompt", default="reply ccproxy-ok", help="prompt for --claude smoke test")
@@ -164,10 +171,10 @@ def cmd_current(args: argparse.Namespace) -> int:
 def cmd_use(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = select_profile(config, args.profile)
-    path = save_active_profile(profile.name, active_profile_path())
-    ready = _ensure_managed_adapter_if_needed(profile, args)
+    ready = _ensure_provider_ready(profile, args)
     if ready != 0:
         return ready
+    path = save_active_profile(profile.name, active_profile_path())
     print(f"active profile: {profile.name}")
     print(f"state: {path}")
     return 0
@@ -176,12 +183,12 @@ def cmd_use(args: argparse.Namespace) -> int:
 def cmd_model_set(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _select_profile_for_model_set(config, args.profile)
+    ready = _ensure_provider_ready(profile, args)
+    if ready != 0:
+        return ready
     model = validate_model_name(args.model) if args.model else _select_model_for_profile(profile)
     profile_path = save_active_profile(profile.name, active_profile_path())
     model_path = save_active_model(profile.name, model, active_models_path())
-    ready = _ensure_managed_adapter_if_needed(profile, args)
-    if ready != 0:
-        return ready
     print(f"active provider: {profile.name}")
     print(f"active model: {model}")
     print(f"profile state: {profile_path}")
@@ -269,6 +276,22 @@ def _ordered_model_choices(profile: ProviderProfile) -> list[tuple[str, str]]:
     return choices
 
 
+def _ensure_provider_ready(profile: ProviderProfile, args: argparse.Namespace) -> int:
+    managed = _ensure_managed_adapter_if_needed(profile, args)
+    if managed != 0:
+        return managed
+    if not provider_key_missing(profile):
+        return 0
+    if not getattr(args, "no_open_login", False):
+        opened = open_provider_setup(profile)
+        if opened:
+            setup = setup_for_profile(profile)
+            if setup:
+                print(f"opened provider setup page: {setup.url}", file=sys.stderr)
+    print(provider_setup_message(profile), file=sys.stderr)
+    return 2
+
+
 def _ensure_managed_adapter_if_needed(profile: ProviderProfile, args: argparse.Namespace) -> int:
     if getattr(args, "no_adapter_start", False):
         return 0
@@ -292,14 +315,14 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     config = load_config(args.config)
     profile = _select_profile_for_model_set(config, args.profile)
-    model = validate_model_name(args.model) if args.model else _select_model_for_profile(profile)
     path = _ensure_config_file(args.config, profile.name)
     print(f"config: {path}")
-    profile_path = save_active_profile(profile.name, active_profile_path())
-    model_path = save_active_model(profile.name, model, active_models_path())
-    ready = _ensure_managed_adapter_if_needed(profile, args)
+    ready = _ensure_provider_ready(profile, args)
     if ready != 0:
         return ready
+    model = validate_model_name(args.model) if args.model else _select_model_for_profile(profile)
+    profile_path = save_active_profile(profile.name, active_profile_path())
+    model_path = save_active_model(profile.name, model, active_models_path())
     print(f"active provider: {profile.name}")
     print(f"active model: {model}")
     print(f"profile state: {profile_path}")
@@ -318,7 +341,7 @@ def _ensure_config_file(config_path: str | None, default_profile: str) -> Path:
 def cmd_serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _resolve_profile(config, args)
-    ready = _ensure_managed_adapter_if_needed(profile, args)
+    ready = _ensure_provider_ready(profile, args)
     if ready != 0:
         return ready
     server = _server_from_args(config.server, args)
@@ -331,7 +354,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _resolve_profile(config, args)
-    ready = _ensure_managed_adapter_if_needed(profile, args)
+    ready = _ensure_provider_ready(profile, args)
     if ready != 0:
         return ready
     server = _server_from_args(config.server, args)
@@ -387,6 +410,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"upstream_model: {select_model(None, profile)}")
     if profile.api_key_env:
         print(f"api_key_env: {profile.api_key_env} ({'set' if os.environ.get(profile.api_key_env) else 'missing'})")
+        if provider_key_missing(profile):
+            setup = setup_for_profile(profile)
+            if setup:
+                print(f"provider_setup_url: {setup.url}")
     else:
         print("api_key_env: managed")
     print(f"claude: {_find_claude() or 'not found'}")
@@ -408,16 +435,16 @@ def cmd_test(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _resolve_profile(config, args)
     if args.claude:
-        ready = _ensure_managed_adapter_if_needed(profile, args)
+        ready = _ensure_provider_ready(profile, args)
         if ready != 0:
             return ready
         server = _server_from_args(config.server, args)
         claude_args = ["claude", "--bare", "--model", "sonnet", "-p", args.prompt]
         return _run_claude_through_proxy(server, profile, claude_args, expected_text="ccproxy-ok")
     if args.real:
-        if profile.api_key_env and not os.environ.get(profile.api_key_env):
-            print(f"missing {profile.api_key_env}; refusing real provider test")
-            return 2
+        ready = _ensure_provider_ready(profile, args)
+        if ready != 0:
+            return ready
         client = UpstreamClient(profile, timeout=30)
         result = client.messages(
             {

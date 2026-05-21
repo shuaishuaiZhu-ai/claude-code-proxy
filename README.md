@@ -15,11 +15,12 @@ ccproxy model set
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-`ccproxy init` writes config, runs model selection, and prepares any managed
-adapter required by the selected provider. `ccproxy model set` can be used later
-to switch provider/model. You can pick a configured model or type any upstream
-model name, such as `ChatGPT5.5`, `ChatGPT5.4`, or a model exposed by your own
-adapter.
+`ccproxy init` writes config, runs model selection, and prepares the selected
+provider. `ccproxy model set` can be used later to switch provider/model. If a
+provider is not configured yet, `ccproxy` opens the relevant login or API-key
+page before saving the selection. You can pick a configured model or type any
+upstream model name, such as `ChatGPT5.5`, `ChatGPT5.4`, or a model exposed by
+your own adapter.
 
 ```mermaid
 flowchart LR
@@ -155,12 +156,31 @@ Interactive:
 ccproxy model set
 ```
 
+The setup order is:
+
+1. choose provider
+2. configure provider if needed
+3. choose model
+4. save active provider/model
+
+For `chatgpt-subscription`, step 2 runs the managed auth2api login/start flow.
+For API-key providers such as `openai-key`, `kimi`, `zhipu`, and `minimax-cn`,
+step 2 opens the provider console if the required environment variable is
+missing, then prints the exact environment variable command to run. `ccproxy`
+does not save API keys to project files.
+
 Non-interactive:
 
 ```sh
 ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ccproxy model current
 ccproxy model clear
+```
+
+If you are on a headless machine or do not want a browser to open:
+
+```sh
+ccproxy model set --provider openai-key --model gpt-4.1 --no-open-login
 ```
 
 One-off override without saving:
@@ -242,9 +262,11 @@ ccproxy model current
 
 For `chatgpt-subscription`, run `ccproxy init` or `ccproxy model set`; this
 installs auth2api, starts the ChatGPT/Codex login flow, and launches the local
-adapter. For `custom`, you still own the adapter process. A plain `claude`
-command is not the same as `ccproxy run`; it starts normal Claude Code auth and
-may show `Not logged in`.
+adapter. For API-key providers, run `ccproxy model set`; if the required
+environment variable is missing, it opens the provider setup page and refuses to
+save an unusable selection. For `custom`, you still own the adapter process. A
+plain `claude` command is not the same as `ccproxy run`; it starts normal Claude
+Code auth and may show `Not logged in`.
 
 ## Config
 

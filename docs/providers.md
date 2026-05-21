@@ -32,6 +32,17 @@ ccproxy run -- -p "reply ccproxy-ok"
 choose a configured alias such as `big`, `middle`, or `small`, or type any
 custom upstream model name.
 
+Before asking for a model, `ccproxy model set` verifies that the selected
+provider is usable:
+
+- `chatgpt-subscription`: installs/starts the managed auth2api adapter and runs
+  the ChatGPT/Codex login flow when no token exists.
+- API-key providers: checks the configured environment variable. If it is
+  missing, `ccproxy` opens the provider setup page, prints the exact environment
+  variable command, and exits without saving an unusable provider/model state.
+- `custom`: skips API-key enforcement because local adapters often use their own
+  auth scheme or no auth at all.
+
 Non-interactive examples:
 
 ```sh
@@ -43,6 +54,12 @@ ccproxy model set --provider kimi --model moonshot-v1-128k
 The active profile is stored at `~/.ccproxy/active.toml`. Active model choices
 are stored per provider at `~/.ccproxy/models.toml`. Neither file stores API
 keys.
+
+Use `--no-open-login` when running on a headless server:
+
+```sh
+ccproxy model set --provider openai-key --model gpt-4.1 --no-open-login
+```
 
 ## Subscription Boundary
 
