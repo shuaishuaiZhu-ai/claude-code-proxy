@@ -53,15 +53,15 @@ if ($DoctorOnly) {
 }
 
 if ($Prompt) {
-    $ResolvedClaudeArgs = @("claude", "--bare", "--model", "sonnet", "-p", $Prompt)
+    $ResolvedClaudeArgs = @("claude", "--model", "sonnet", "-p", $Prompt)
 } elseif ($ClaudeArgs.Count -gt 0) {
     if ($ClaudeArgs[0] -eq "claude" -or $ClaudeArgs[0] -like "*claude.cmd") {
         $ResolvedClaudeArgs = $ClaudeArgs
     } else {
-        $ResolvedClaudeArgs = @("claude", "--bare") + $ClaudeArgs
+        $ResolvedClaudeArgs = @("claude") + $ClaudeArgs
     }
 } else {
-    $ResolvedClaudeArgs = @("claude", "--bare", "--model", "sonnet")
+    $ResolvedClaudeArgs = @("claude", "--model", "sonnet")
 }
 
 $runArgs = @("-m", "ccproxy", "run")

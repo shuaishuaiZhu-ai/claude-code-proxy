@@ -122,6 +122,57 @@ class TranslatorTests(unittest.TestCase):
         self.assertEqual(payload["content"][0]["type"], "text")
         self.assertIn("missing required parameter(s): command", payload["content"][0]["text"])
 
+    def test_invalid_tool_call_wrong_type_is_not_forwarded(self) -> None:
+        payload = openai_to_anthropic(
+            {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "tool_calls": [
+                                {"id": "call_1", "type": "function", "function": {"name": "Bash", "arguments": "{\"command\":123}"}}
+                            ]
+                        },
+                    }
+                ],
+            },
+            requested_tools=[
+                {
+                    "name": "Bash",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {"command": {"type": "string"}},
+                        "required": ["command"],
+                    },
+                }
+            ],
+        )
+        self.assertEqual(payload["stop_reason"], "end_turn")
+        self.assertIn("command expected string", payload["content"][0]["text"])
+
+    def test_unknown_tool_call_is_not_forwarded(self) -> None:
+        payload = openai_to_anthropic(
+            {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {"name": "DefinitelyNotAClaudeTool", "arguments": "{\"command\":\"echo no\"}"},
+                                }
+                            ]
+                        },
+                    }
+                ],
+            },
+            requested_tools=[{"name": "Bash", "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}}}],
+        )
+        self.assertEqual(payload["stop_reason"], "end_turn")
+        self.assertIn("unknown tool", payload["content"][0]["text"])
+
     def test_openai_stream_to_anthropic_sse(self) -> None:
         chunks = [
             {"choices": [{"delta": {"content": "ccproxy"}, "finish_reason": None}]},
@@ -131,6 +182,32 @@ class TranslatorTests(unittest.TestCase):
         self.assertIn("event: message_start", raw)
         self.assertIn("ccproxy", raw)
         self.assertIn("event: message_stop", raw)
+
+    def test_openai_stream_tool_call_uses_input_json_delta(self) -> None:
+        chunks = [
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call_1",
+                                    "function": {"name": "PowerShell", "arguments": "{\"command\":\"Write-Output ok\"}"},
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            }
+        ]
+        raw = b"".join(openai_stream_to_anthropic_sse(chunks, "test-model")).decode("utf-8")
+        self.assertIn('"type": "tool_use"', raw)
+        self.assertIn('"input": {}', raw)
+        self.assertIn('"type": "input_json_delta"', raw)
+        self.assertIn('\\"command\\": \\"Write-Output ok\\"', raw)
+        self.assertIn('"stop_reason": "tool_use"', raw)
 
     def test_invalid_stream_tool_call_missing_required_input_is_not_forwarded(self) -> None:
         chunks = [
@@ -165,6 +242,73 @@ class TranslatorTests(unittest.TestCase):
         ).decode("utf-8")
         self.assertIn("missing required parameter(s): command", raw)
         self.assertNotIn('"type": "tool_use"', raw)
+        self.assertIn('"stop_reason": "end_turn"', raw)
+        self.assertNotIn('"stop_reason": "tool_use"', raw)
+
+    def test_invalid_stream_tool_call_wrong_type_is_not_forwarded(self) -> None:
+        chunks = [
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {"index": 0, "id": "call_1", "function": {"name": "Bash", "arguments": "{\"command\":123}"}}
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            }
+        ]
+        raw = b"".join(
+            openai_stream_to_anthropic_sse(
+                chunks,
+                "test-model",
+                requested_tools=[
+                    {
+                        "name": "Bash",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {"command": {"type": "string"}},
+                            "required": ["command"],
+                        },
+                    }
+                ],
+            )
+        ).decode("utf-8")
+        self.assertIn("command expected string", raw)
+        self.assertNotIn('"type": "tool_use"', raw)
+        self.assertIn('"stop_reason": "end_turn"', raw)
+
+    def test_invalid_stream_unknown_tool_is_not_forwarded(self) -> None:
+        chunks = [
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call_1",
+                                    "function": {"name": "DefinitelyNotAClaudeTool", "arguments": "{\"command\":\"echo no\"}"},
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            }
+        ]
+        raw = b"".join(
+            openai_stream_to_anthropic_sse(
+                chunks,
+                "test-model",
+                requested_tools=[{"name": "Bash", "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}}}],
+            )
+        ).decode("utf-8")
+        self.assertIn("unknown tool", raw)
+        self.assertNotIn('"type": "tool_use"', raw)
+        self.assertIn('"stop_reason": "end_turn"', raw)
 
 
 if __name__ == "__main__":

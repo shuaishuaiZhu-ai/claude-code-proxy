@@ -5,4 +5,4 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 if [ "$#" -eq 0 ]; then
   set -- --model sonnet
 fi
-PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python -m ccproxy run -- claude --bare "$@"
+PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python -m ccproxy run -- claude "$@"

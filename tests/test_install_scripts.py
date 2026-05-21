@@ -36,6 +36,14 @@ class InstallScriptTests(unittest.TestCase):
             self.assertTrue("pip uninstall" in text or 'pip" uninstall' in text or "pip', 'uninstall" in text)
             self.assertIn("does not uninstall Python, pip, or Claude", text)
 
+    def test_normal_run_wrappers_do_not_force_bare_mode(self) -> None:
+        for name in ("ccproxy-run.cmd", "chatgpt-run.cmd", "ccproxy-run.sh", "run_chatgpt_subscription.ps1"):
+            self.assertNotIn("--bare", read_script(name))
+
+    def test_smoke_wrappers_keep_bare_mode(self) -> None:
+        for name in ("ccproxy-smoke.cmd", "chatgpt-smoke.cmd", "ccproxy-smoke.sh"):
+            self.assertIn("--bare", read_script(name))
+
 
 if __name__ == "__main__":
     unittest.main()

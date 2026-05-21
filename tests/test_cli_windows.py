@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from ccproxy.cli import _claude_command
-from ccproxy.env import build_claude_env, ensure_bare_args
+from ccproxy.env import build_claude_env
 
 
 class WindowsCliTests(unittest.TestCase):
@@ -47,18 +47,6 @@ class ClaudeEnvironmentTests(unittest.TestCase):
         )
         self.assertEqual(env["ANTHROPIC_API_KEY"], "ccproxy")
         self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "ccproxy")
-
-    def test_ensure_bare_args_inserts_after_claude(self) -> None:
-        self.assertEqual(
-            ensure_bare_args(["claude", "--model", "sonnet"]),
-            ["claude", "--bare", "--model", "sonnet"],
-        )
-
-    def test_ensure_bare_args_does_not_duplicate(self) -> None:
-        self.assertEqual(
-            ensure_bare_args(["claude", "--bare", "--model", "sonnet"]),
-            ["claude", "--bare", "--model", "sonnet"],
-        )
 
 
 if __name__ == "__main__":

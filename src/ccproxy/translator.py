@@ -139,6 +139,7 @@ def openai_stream_to_anthropic_sse(
     text_started = False
     text_index = 0
     tool_calls: dict[int, dict[str, Any]] = {}
+    emitted_tool_call = False
     finish_reason: str | None = None
 
     for chunk in chunks:
@@ -190,6 +191,7 @@ def openai_stream_to_anthropic_sse(
         if validation_error:
             yield from _text_block_sse(index, validation_error)
             continue
+        emitted_tool_call = True
         yield _sse(
             "content_block_start",
             {
@@ -199,13 +201,21 @@ def openai_stream_to_anthropic_sse(
                     "type": "tool_use",
                     "id": state.get("id") or f"call_{index}",
                     "name": state.get("name") or "",
-                    "input": tool_input,
+                    "input": {},
                 },
+            },
+        )
+        yield _sse(
+            "content_block_delta",
+            {
+                "type": "content_block_delta",
+                "index": index,
+                "delta": {"type": "input_json_delta", "partial_json": json.dumps(tool_input, ensure_ascii=False)},
             },
         )
         yield _sse("content_block_stop", {"type": "content_block_stop", "index": index})
 
-    stop_reason = _finish_reason_to_stop_reason(finish_reason, [{"type": "tool_use"}] if tool_calls else [])
+    stop_reason = _finish_reason_to_stop_reason(finish_reason, [{"type": "tool_use"}] if emitted_tool_call else [])
     yield _sse(
         "message_delta",
         {
@@ -337,15 +347,16 @@ def _tool_input_error(tool_name: str, tool_input: Any, requested_tools: list[dic
         return None
     schema = _tool_schema(tool_name, requested_tools)
     if not schema:
-        return None
+        return f"Skipped invalid tool call `{tool_name}`: unknown tool."
     required = schema.get("required") or []
-    if not required:
-        return None
     if not isinstance(tool_input, dict):
         return f"Skipped invalid tool call `{tool_name}`: input must be a JSON object."
     missing = [field for field in required if field not in tool_input or tool_input[field] in (None, "")]
     if not missing:
-        return None
+        type_errors = _tool_type_errors(tool_input, schema)
+        if not type_errors:
+            return None
+        return f"Skipped invalid tool call `{tool_name}`: invalid parameter type(s): {', '.join(type_errors)}."
     fields = ", ".join(str(field) for field in missing)
     return f"Skipped invalid tool call `{tool_name}`: missing required parameter(s): {fields}."
 
@@ -356,6 +367,47 @@ def _tool_schema(tool_name: str, requested_tools: list[dict[str, Any]]) -> dict[
             schema = tool.get("input_schema")
             return schema if isinstance(schema, dict) else None
     return None
+
+
+def _tool_type_errors(tool_input: dict[str, Any], schema: dict[str, Any]) -> list[str]:
+    properties = schema.get("properties") or {}
+    if not isinstance(properties, dict):
+        return []
+    errors: list[str] = []
+    for field, value in tool_input.items():
+        field_schema = properties.get(field)
+        if not isinstance(field_schema, dict) or "type" not in field_schema:
+            continue
+        expected = field_schema["type"]
+        if not _json_type_matches(value, expected):
+            errors.append(f"{field} expected {_format_json_type(expected)}")
+    return errors
+
+
+def _json_type_matches(value: Any, expected: Any) -> bool:
+    expected_types = expected if isinstance(expected, list) else [expected]
+    for expected_type in expected_types:
+        if expected_type == "string" and isinstance(value, str):
+            return True
+        if expected_type == "number" and isinstance(value, (int, float)) and not isinstance(value, bool):
+            return True
+        if expected_type == "integer" and isinstance(value, int) and not isinstance(value, bool):
+            return True
+        if expected_type == "boolean" and isinstance(value, bool):
+            return True
+        if expected_type == "object" and isinstance(value, dict):
+            return True
+        if expected_type == "array" and isinstance(value, list):
+            return True
+        if expected_type == "null" and value is None:
+            return True
+    return False
+
+
+def _format_json_type(expected: Any) -> str:
+    if isinstance(expected, list):
+        return " or ".join(str(item) for item in expected)
+    return str(expected)
 
 
 def _tool_choice_to_openai(tool_choice: Any) -> Any:

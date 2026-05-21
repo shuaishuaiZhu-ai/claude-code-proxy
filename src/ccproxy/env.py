@@ -9,11 +9,3 @@ def build_claude_env(base_url: str, current_env: Mapping[str, str]) -> dict[str,
     env["ANTHROPIC_API_KEY"] = "ccproxy"
     env["ANTHROPIC_AUTH_TOKEN"] = "ccproxy"
     return env
-
-
-def ensure_bare_args(args: list[str]) -> list[str]:
-    if "--bare" in args:
-        return args
-    if not args:
-        return ["claude", "--bare"]
-    return [args[0], "--bare", *args[1:]]

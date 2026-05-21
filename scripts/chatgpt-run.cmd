@@ -6,8 +6,8 @@ set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
 python -m ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 if errorlevel 1 exit /b %ERRORLEVEL%
 if "%~1"=="" (
-  python -m ccproxy run -- claude --bare --model sonnet
+  python -m ccproxy run -- claude --model sonnet
 ) else (
-  python -m ccproxy run -- claude --bare %*
+  python -m ccproxy run -- claude %*
 )
 exit /b %ERRORLEVEL%
