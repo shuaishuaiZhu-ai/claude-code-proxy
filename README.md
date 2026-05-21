@@ -91,9 +91,10 @@ the local adapter for you using
 [auth2api](https://github.com/AmazingAng/auth2api), then routes Claude Code
 through that adapter.
 
-During setup, auth2api opens or prints a ChatGPT/Codex login URL. Finish the
-browser login, then return to the terminal. By default, the managed adapter runs
-at:
+During setup, `ccproxy` uses OpenAI Codex device-code login by default. It
+prints a verification URL and one-time code, then waits while you finish login
+in any browser. This avoids the fragile `localhost:1455` browser callback used
+by the older Codex consent flow. By default, the managed adapter runs at:
 
 ```text
 http://127.0.0.1:8317/v1/chat/completions
@@ -121,6 +122,14 @@ ccproxy run -- -p "reply ccproxy-ok"
 to prepare the managed adapter when `chatgpt-subscription` is active. On
 Windows, the installer uses `npm.cmd` instead of `npm.ps1`, avoiding PowerShell
 execution-policy failures.
+
+To force the older browser callback flow, add `--browser-login`. Use this only
+when you specifically want the Codex consent page and `localhost:1455` callback
+behavior:
+
+```cmd
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5 --browser-login
+```
 
 ## macOS / WSL / Linux
 
@@ -261,15 +270,17 @@ ccproxy model current
 ```
 
 For `chatgpt-subscription`, run `ccproxy init` or `ccproxy model set`; this
-installs auth2api, starts the ChatGPT/Codex login flow, and launches the local
-adapter. For API-key providers, run `ccproxy model set`; if the required
+installs auth2api, starts the ChatGPT/Codex device-code login flow, and launches
+the local adapter. For API-key providers, run `ccproxy model set`; if the required
 environment variable is missing, it opens the provider setup page and refuses to
 save an unusable selection. For `custom`, you still own the adapter process. A
 plain `claude` command is not the same as `ccproxy run`; it starts normal Claude
 Code auth and may show `Not logged in`.
 
 If the browser stays on the "Sign in with ChatGPT to Codex" consent page, or the
-continue button stays unavailable, run:
+continue button spins forever, you are on the older browser callback flow. Stop
+that login and rerun without `--browser-login`; the default device-code login
+does not use the consent callback page. You can also inspect the state with:
 
 ```sh
 ccproxy doctor --profile chatgpt-subscription
@@ -278,10 +289,9 @@ ccproxy doctor --profile chatgpt-subscription
 `chatgpt_auth_https: ... cloudflare_challenge` means the flow is blocked on the
 OpenAI/Codex web login step before any `localhost` callback happens, so the
 proxy has not received anything yet. Check browser extensions, privacy or ad
-blockers, and the system proxy or VPN. `codex_callback_port_1455: busy` is the
-next stage: after the page proceeds and redirects locally, `ccproxy` falls back
-to manual callback mode and asks you to paste the full callback URL from the
-browser address bar.
+blockers, and the system proxy or VPN, or use the default device-code login.
+`codex_callback_port_1455: busy` is only relevant to `--browser-login`; device
+code login does not use that port.
 
 If ChatGPT login exits with `EADDRINUSE` on `127.0.0.1:1455`, another process
 already owns the Codex OAuth callback port. Newer `ccproxy` builds detect this

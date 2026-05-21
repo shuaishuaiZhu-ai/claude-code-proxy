@@ -1,20 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+import base64
+import json
 import platform
+import re
 import shutil
 import socket
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import webbrowser
 
 
 AUTH2API_REPO = "https://github.com/AmazingAng/auth2api.git"
 AUTH2API_PORT = 8317
 AUTH2API_API_KEY = "ccproxy-local"
 CODEX_CALLBACK_PORT = 1455
+CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+CODEX_ISSUER = "https://auth.openai.com"
+CODEX_DEVICE_AUTH_BASE = f"{CODEX_ISSUER}/api/accounts/deviceauth"
+CODEX_DEVICE_REDIRECT_URI = f"{CODEX_ISSUER}/deviceauth/callback"
+CODEX_TOKEN_URL = f"{CODEX_ISSUER}/oauth/token"
 CHATGPT_AUTH_ENDPOINTS = (
     "https://auth.openai.com/sign-in-with-chatgpt/codex/consent",
     "https://auth.openai.com/oauth/authorize",
@@ -52,6 +63,14 @@ class EndpointStatus:
     issue: str
 
 
+@dataclass(frozen=True)
+class DeviceCode:
+    verification_url: str
+    user_code: str
+    device_auth_id: str
+    interval: int
+
+
 def default_adapter_paths() -> AdapterPaths:
     root = Path.home() / ".ccproxy" / "adapters" / "auth2api"
     return AdapterPaths(
@@ -63,7 +82,12 @@ def default_adapter_paths() -> AdapterPaths:
     )
 
 
-def ensure_chatgpt_adapter(manual_login: bool = False, auto_install: bool = True) -> None:
+def ensure_chatgpt_adapter(
+    manual_login: bool = False,
+    auto_install: bool = True,
+    browser_login: bool = False,
+    open_browser: bool = True,
+) -> None:
     paths = default_adapter_paths()
     _ensure_node()
     if not _auth2api_installed(paths):
@@ -72,7 +96,15 @@ def ensure_chatgpt_adapter(manual_login: bool = False, auto_install: bool = True
         _install_auth2api(paths)
     _write_auth2api_config(paths)
     if not _has_codex_token(paths):
-        _login_auth2api(paths, manual=manual_login)
+        if browser_login:
+            _login_auth2api(paths, manual=manual_login)
+        else:
+            try:
+                _login_codex_device_auth(paths, open_browser=open_browser)
+            except ManagedAdapterError as exc:
+                print(f"Codex device-code login failed: {exc}")
+                print("falling back to browser callback login")
+                _login_auth2api(paths, manual=manual_login)
     if not is_auth2api_running():
         _start_auth2api(paths)
     if not wait_for_auth2api():
@@ -169,6 +201,23 @@ def _login_auth2api(paths: AdapterPaths, manual: bool = False) -> None:
     _run_checked(command, cwd=paths.repo, action="ChatGPT subscription login")
 
 
+def _login_codex_device_auth(paths: AdapterPaths, open_browser: bool = True) -> None:
+    print("starting ChatGPT subscription login via Codex device code")
+    device = _request_codex_device_code()
+    print("Open this URL in your browser and enter the one-time code:")
+    print(device.verification_url)
+    print(f"Code: {device.user_code}")
+    if open_browser:
+        webbrowser.open(device.verification_url)
+    result = _poll_codex_device_code(device)
+    token_response = _exchange_codex_device_code(
+        authorization_code=str(result.get("authorization_code") or ""),
+        code_verifier=str(result.get("code_verifier") or ""),
+    )
+    email = _save_codex_token_response(paths, token_response)
+    print(f"Codex device-code login imported for {email}")
+
+
 def _start_auth2api(paths: AdapterPaths) -> None:
     node = _node_command()
     paths.root.mkdir(parents=True, exist_ok=True)
@@ -210,6 +259,150 @@ def _run_checked(command: list[str], cwd: Path | None, action: str) -> None:
         raise ManagedAdapterError(f"{action} failed with exit code {exc.returncode}") from exc
     except OSError as exc:
         raise ManagedAdapterError(f"{action} failed: {exc}") from exc
+
+
+def _request_codex_device_code() -> DeviceCode:
+    payload = _post_json(f"{CODEX_DEVICE_AUTH_BASE}/usercode", {"client_id": CODEX_CLIENT_ID})
+    device = DeviceCode(
+        verification_url=f"{CODEX_ISSUER}/codex/device",
+        user_code=str(payload.get("user_code") or payload.get("usercode") or ""),
+        device_auth_id=str(payload.get("device_auth_id") or ""),
+        interval=int(str(payload.get("interval") or "5")),
+    )
+    if not device.user_code or not device.device_auth_id:
+        raise ManagedAdapterError("device auth response did not include user code or device id")
+    return device
+
+
+def _poll_codex_device_code(device: DeviceCode, timeout: int = 15 * 60) -> dict[str, object]:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status, payload = _post_json_status(
+            f"{CODEX_DEVICE_AUTH_BASE}/token",
+            {"device_auth_id": device.device_auth_id, "user_code": device.user_code},
+        )
+        if 200 <= status < 300:
+            return payload
+        if status not in {403, 404}:
+            raise ManagedAdapterError(f"device auth failed with HTTP {status}: {payload}")
+        time.sleep(min(max(device.interval, 1), max(deadline - time.time(), 0)))
+    raise ManagedAdapterError("device auth timed out after 15 minutes")
+
+
+def _exchange_codex_device_code(authorization_code: str, code_verifier: str) -> dict[str, object]:
+    if not authorization_code or not code_verifier:
+        raise ManagedAdapterError("device auth response did not include authorization code or verifier")
+    body = urllib.parse.urlencode(
+        {
+            "grant_type": "authorization_code",
+            "code": authorization_code,
+            "redirect_uri": CODEX_DEVICE_REDIRECT_URI,
+            "client_id": CODEX_CLIENT_ID,
+            "code_verifier": code_verifier,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        CODEX_TOKEN_URL,
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "ccproxy/doctor"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "ignore")
+        raise ManagedAdapterError(f"device auth token exchange failed with HTTP {exc.code}: {detail}") from exc
+    except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise ManagedAdapterError(f"device auth token exchange failed: {exc}") from exc
+
+
+def _save_codex_token_response(
+    paths: AdapterPaths,
+    token_response: dict[str, object],
+    last_refresh: str | None = None,
+) -> str:
+    id_token = str(token_response.get("id_token") or "")
+    access_token = str(token_response.get("access_token") or "")
+    refresh_token = str(token_response.get("refresh_token") or "")
+    if not id_token or not access_token or not refresh_token:
+        raise ManagedAdapterError("Codex token response is missing id_token, access_token, or refresh_token")
+    try:
+        id_claims = _decode_jwt_payload(id_token)
+        access_claims = _decode_jwt_payload(access_token)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ManagedAdapterError(f"could not parse Codex token response: {exc}") from exc
+    auth_claims = id_claims.get("https://api.openai.com/auth") or {}
+    if not isinstance(auth_claims, dict):
+        auth_claims = {}
+    email = str(id_claims.get("email") or "unknown")
+    account_uuid = str(auth_claims.get("chatgpt_account_id") or token_response.get("account_id") or "")
+    plan_type = auth_claims.get("chatgpt_plan_type") or id_claims.get("chatgpt_plan_type")
+    expires_at = _iso_from_epoch(access_claims.get("exp") or id_claims.get("exp"))
+    paths.auth_dir.mkdir(parents=True, exist_ok=True)
+    storage = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "last_refresh": last_refresh or datetime.now(timezone.utc).isoformat(),
+        "email": email,
+        "type": "codex",
+        "expired": expires_at,
+        "account_uuid": account_uuid,
+        "id_token": id_token,
+        "plan_type": plan_type,
+    }
+    target = paths.auth_dir / f"codex-{_sanitize_token_filename(email)}.json"
+    target.write_text(json.dumps(storage, indent=2), encoding="utf-8")
+    return email
+
+
+def _post_json(url: str, payload: dict[str, object], timeout: int = 30) -> dict[str, object]:
+    status, body = _post_json_status(url, payload, timeout=timeout)
+    if not 200 <= status < 300:
+        raise ManagedAdapterError(f"request to {url} failed with HTTP {status}: {body}")
+    return body
+
+
+def _post_json_status(url: str, payload: dict[str, object], timeout: int = 30) -> tuple[int, dict[str, object]]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "User-Agent": "ccproxy/doctor"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "ignore")
+        try:
+            parsed = json.loads(detail) if detail else {}
+        except json.JSONDecodeError:
+            parsed = {"error": detail}
+        return exc.code, parsed
+    except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise ManagedAdapterError(f"request to {url} failed: {exc}") from exc
+
+
+def _decode_jwt_payload(token: str) -> dict[str, object]:
+    parts = token.split(".")
+    if len(parts) < 2:
+        raise ValueError("token is not a JWT")
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    decoded = base64.urlsafe_b64decode(payload.encode("ascii"))
+    data = json.loads(decoded.decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("JWT payload is not an object")
+    return data
+
+
+def _iso_from_epoch(epoch: object) -> str:
+    if isinstance(epoch, (int, float)):
+        return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _sanitize_token_filename(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9@._-]", "_", value).replace("..", "_")
 
 
 def _check_https_endpoint(url: str, timeout: int) -> EndpointStatus:

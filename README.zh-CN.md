@@ -87,8 +87,10 @@ npm 的 `claude.cmd` 入口。
 [auth2api](https://github.com/AmazingAng/auth2api) 为你安装并启动本地 adapter，
 然后把 Claude Code 请求转发到该 adapter。
 
-首次配置时，auth2api 会打开或打印一个 ChatGPT/Codex 登录 URL。你在浏览器里
-完成登录后回到终端即可。默认托管 adapter 地址是：
+首次配置时，`ccproxy` 默认使用 OpenAI Codex device-code 登录：终端会显示一个
+验证 URL 和一次性 code，你在任意浏览器里完成登录即可。这个流程不使用旧 Codex
+同意页的 `localhost:1455` callback，因此不会卡在 Edge/Chrome 的 consent 回跳。
+默认托管 adapter 地址是：
 
 ```text
 http://127.0.0.1:8317/v1/chat/completions
@@ -115,6 +117,12 @@ ccproxy run -- -p "reply ccproxy-ok"
 `ccproxy init`、`ccproxy model set`、`ccproxy serve` 和 `ccproxy run` 都会在
 `chatgpt-subscription` 激活时自动准备托管 adapter。Windows 上安装时会使用
 `npm.cmd`，避免 PowerShell 执行策略拦截 `npm.ps1`。
+
+如果你明确想使用旧的浏览器 callback 流程，可以加 `--browser-login`：
+
+```cmd
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5 --browser-login
+```
 
 ## macOS / WSL / Linux
 
@@ -242,14 +250,15 @@ ccproxy model current
 ```
 
 对于 `chatgpt-subscription`，运行 `ccproxy init` 或 `ccproxy model set`；这会
-安装 auth2api、启动 ChatGPT/Codex 登录流程，并启动本地 adapter。对于 API key
-provider，运行 `ccproxy model set`；如果缺少必要环境变量，它会打开对应设置页，
+安装 auth2api、启动 ChatGPT/Codex device-code 登录流程，并启动本地 adapter。
+对于 API key provider，运行 `ccproxy model set`；如果缺少必要环境变量，它会打开对应设置页，
 并拒绝保存一个不可用的选择。对于 `custom`，adapter 进程仍然由你自己管理。
 直接运行 `claude` 不等于 `ccproxy run`，它会进入 Claude Code 自己的登录流程，
 可能显示 `Not logged in`。
 
-如果浏览器停在“使用 ChatGPT 登录到 Codex”的同意页，或者“继续”按钮长时间不可用，
-先运行：
+如果浏览器停在“使用 ChatGPT 登录到 Codex”的同意页，或者点“继续”后一直转圈，
+说明你在旧的 browser callback 流程里。停止这次登录，不带 `--browser-login`
+重新运行即可使用默认 device-code 登录。也可以运行下面命令检查状态：
 
 ```sh
 ccproxy doctor --profile chatgpt-subscription
@@ -257,9 +266,9 @@ ccproxy doctor --profile chatgpt-subscription
 
 `chatgpt_auth_https: ... cloudflare_challenge` 表示卡点发生在 OpenAI/Codex
 网页登录阶段，还没有跳回本地 `localhost` callback；此时 proxy 收不到任何东西。
-优先检查浏览器扩展、隐私/广告拦截、系统代理或 VPN。`codex_callback_port_1455: busy`
-是下一阶段的问题：页面成功继续并跳回本地以后，`ccproxy` 会自动使用
-manual callback 模式，让你把浏览器地址栏里的完整 callback URL 粘贴回终端。
+优先使用默认 device-code 登录，或检查浏览器扩展、隐私/广告拦截、系统代理或 VPN。
+`codex_callback_port_1455: busy` 只和 `--browser-login` 有关；device-code 登录
+不使用该端口。
 
 如果 ChatGPT 登录因为 `127.0.0.1:1455` 上的 `EADDRINUSE` 很快退出，说明
 Codex OAuth 回调端口已经被其他进程占用。新版 `ccproxy` 会在登录前检测该端口，

@@ -103,7 +103,7 @@ class CliTests(unittest.TestCase):
         text = out.getvalue()
         self.assertIn("codex_callback_port_1455: busy", text)
         self.assertIn("chatgpt_auth_https: https://auth.openai.com/sign-in-with-chatgpt/codex/consent HTTP 403 cloudflare_challenge", text)
-        self.assertIn("consent page may stay disabled before localhost callback", text)
+        self.assertIn("default device-code login", text)
 
 
 class ProfileCommandTests(unittest.TestCase):

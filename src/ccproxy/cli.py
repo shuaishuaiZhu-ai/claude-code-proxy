@@ -65,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--model", help="upstream model name; prompts when omitted")
     init_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     init_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
+    init_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     init_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     init_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     init_parser.add_argument("--skip-model-set", action="store_true", help="only write config; do not choose provider/model")
@@ -82,6 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     use_parser.add_argument("profile", help="profile name to activate")
     use_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     use_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    use_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     use_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     use_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     use_parser.set_defaults(func=cmd_use)
@@ -94,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     model_set_parser.add_argument("--model", help="upstream model name")
     model_set_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     model_set_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
+    model_set_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     model_set_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     model_set_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     model_set_parser.set_defaults(func=cmd_model_set)
@@ -114,6 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host")
     serve_parser.add_argument("--port", type=int)
     serve_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    serve_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     serve_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     serve_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     serve_parser.add_argument("--fastapi", action="store_true", help="serve through FastAPI/uvicorn if installed")
@@ -125,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--host")
     run_parser.add_argument("--port", type=int)
     run_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    run_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     run_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     run_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     run_parser.add_argument("claude_args", nargs=argparse.REMAINDER)
@@ -141,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     test_parser.add_argument("--host")
     test_parser.add_argument("--port", type=int)
     test_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    test_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     test_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     test_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
     test_parser.add_argument("--real", action="store_true", help="call the configured real provider")
@@ -305,7 +311,11 @@ def _ensure_managed_adapter_if_needed(profile: ProviderProfile, args: argparse.N
     if profile.name != "chatgpt-subscription":
         return 0
     try:
-        ensure_chatgpt_adapter(manual_login=getattr(args, "manual_login", False))
+        ensure_chatgpt_adapter(
+            manual_login=getattr(args, "manual_login", False),
+            browser_login=getattr(args, "browser_login", False),
+            open_browser=not getattr(args, "no_open_login", False),
+        )
     except ManagedAdapterError as exc:
         print(f"failed to prepare ChatGPT subscription adapter: {exc}", file=sys.stderr)
         return 2
@@ -439,7 +449,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             status_text = f"HTTP {endpoint.status}" if endpoint.status is not None else "no_http_response"
             print(f"chatgpt_auth_https: {endpoint.url} {status_text} {endpoint.issue}")
         if any(endpoint.issue == "cloudflare_challenge" for endpoint in auth_statuses):
-            print("chatgpt_auth_hint: consent page may stay disabled before localhost callback; check browser profile, extensions, proxy, or VPN.")
+            print("chatgpt_auth_hint: browser consent flow is being challenged; rerun without --browser-login to use default device-code login.")
     for package in ("fastapi", "uvicorn"):
         print(f"{package}: {'installed' if importlib.util.find_spec(package) else 'missing'}")
     return 0
