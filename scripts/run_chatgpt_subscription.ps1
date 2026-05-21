@@ -104,6 +104,8 @@ if ($env:PYTHONPATH) {
 Write-Step "config: $ConfigPath"
 Write-Step "adapter: $CleanAdapterBaseUrl/chat/completions"
 Write-Step "proxy: http://${ProxyHost}:${ProxyPort}"
+Write-Step "tip: generic switching is available via scripts\ccproxy-switch.cmd chatgpt-subscription"
+Write-Step "tip: use scripts\ccproxy-run.cmd after switching providers"
 
 $doctorCommand = @("-m", "ccproxy", "doctor", "--config", $ConfigPath, "--profile", "chatgpt-subscription")
 & python @doctorCommand
