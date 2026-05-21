@@ -197,6 +197,10 @@ adapter:
 powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 -AdapterBaseUrl "http://127.0.0.1:8000/v1"
 ```
 
+The helper adds Claude Code's `--bare` flag by default so Claude Code uses the
+local proxy instead of opening the login-method selector. Pass `-NoBare` only if
+you explicitly want the normal Claude Code auth/keychain flow.
+
 Smoke test through the same script:
 
 ```powershell

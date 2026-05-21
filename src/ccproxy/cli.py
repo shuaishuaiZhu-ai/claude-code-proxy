@@ -97,6 +97,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         env = os.environ.copy()
         env["ANTHROPIC_BASE_URL"] = f"http://{server.host}:{server.port}"
         env.setdefault("ANTHROPIC_API_KEY", "ccproxy")
+        env.setdefault("ANTHROPIC_AUTH_TOKEN", env["ANTHROPIC_API_KEY"])
         print(f"running through {env['ANTHROPIC_BASE_URL']} with profile {profile.name}")
         return subprocess.call(command, env=env)
     finally:

@@ -18,6 +18,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 
 
 .EXAMPLE
 powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 -AdapterBaseUrl "http://127.0.0.1:8000/v1" -Model sonnet
+
+.NOTES
+The script adds Claude Code's --bare flag by default. In current Claude Code
+versions, --bare skips OAuth/keychain login selection and uses ANTHROPIC_API_KEY
+for custom endpoints.
 #>
 
 [CmdletBinding()]
@@ -29,6 +34,7 @@ param(
     [string]$Model = "sonnet",
     [string]$Prompt,
     [string[]]$ClaudeArgs = @(),
+    [switch]$NoBare,
     [switch]$DoctorOnly
 )
 
@@ -65,6 +71,8 @@ if (-not $AdapterApiKey) {
     $AdapterApiKey = "ccproxy"
 }
 $env:CHATGPT_ADAPTER_API_KEY = $AdapterApiKey
+$env:ANTHROPIC_API_KEY = "ccproxy"
+$env:ANTHROPIC_AUTH_TOKEN = $env:ANTHROPIC_API_KEY
 
 $config = @"
 default_profile = "chatgpt-subscription"
@@ -117,6 +125,18 @@ if ($Prompt) {
     }
 } else {
     $ResolvedClaudeArgs = @("claude", "--model", $Model)
+}
+
+if (-not $NoBare -and -not ($ResolvedClaudeArgs -contains "--bare")) {
+    if ($ResolvedClaudeArgs.Count -gt 0) {
+        if ($ResolvedClaudeArgs.Count -eq 1) {
+            $ResolvedClaudeArgs = @($ResolvedClaudeArgs[0], "--bare")
+        } else {
+            $ResolvedClaudeArgs = @($ResolvedClaudeArgs[0], "--bare") + $ResolvedClaudeArgs[1..($ResolvedClaudeArgs.Count - 1)]
+        }
+    } else {
+        $ResolvedClaudeArgs = @("claude", "--bare")
+    }
 }
 
 Write-Step "starting Claude Code through chatgpt-subscription profile"
