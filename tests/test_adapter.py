@@ -35,6 +35,40 @@ class AdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(adapter.ManagedAdapterError, "install failed with exit code 7"):
                 adapter._run_checked(["x"], cwd=None, action="install")
 
+    def test_login_uses_manual_mode_when_callback_port_is_busy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = adapter.AdapterPaths(
+                root=root,
+                repo=root / "repo",
+                auth_dir=root / "auth",
+                config=root / "repo" / "config.yaml",
+                log=root / "auth2api.log",
+            )
+            paths.repo.mkdir(parents=True)
+            with patch("ccproxy.adapter._node_command", return_value="node"):
+                with patch("ccproxy.adapter._is_port_in_use", return_value=True):
+                    with patch("ccproxy.adapter._run_checked") as runner:
+                        adapter._login_auth2api(paths)
+        self.assertIn("--manual", runner.call_args.args[0])
+
+    def test_login_uses_callback_mode_when_callback_port_is_free(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = adapter.AdapterPaths(
+                root=root,
+                repo=root / "repo",
+                auth_dir=root / "auth",
+                config=root / "repo" / "config.yaml",
+                log=root / "auth2api.log",
+            )
+            paths.repo.mkdir(parents=True)
+            with patch("ccproxy.adapter._node_command", return_value="node"):
+                with patch("ccproxy.adapter._is_port_in_use", return_value=False):
+                    with patch("ccproxy.adapter._run_checked") as runner:
+                        adapter._login_auth2api(paths)
+        self.assertNotIn("--manual", runner.call_args.args[0])
+
     def test_ensure_chatgpt_adapter_installs_logs_in_and_starts(self) -> None:
         with patch("ccproxy.adapter.default_adapter_paths") as paths_factory:
             with tempfile.TemporaryDirectory() as tmp:

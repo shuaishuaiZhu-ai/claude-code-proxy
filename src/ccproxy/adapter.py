@@ -12,6 +12,7 @@ import time
 AUTH2API_REPO = "https://github.com/AmazingAng/auth2api.git"
 AUTH2API_PORT = 8317
 AUTH2API_API_KEY = "ccproxy-local"
+CODEX_CALLBACK_PORT = 1455
 
 
 class ManagedAdapterError(RuntimeError):
@@ -130,10 +131,17 @@ debug: "errors"
 
 def _login_auth2api(paths: AdapterPaths, manual: bool = False) -> None:
     node = _node_command()
+    callback_port_busy = _is_port_in_use("127.0.0.1", CODEX_CALLBACK_PORT)
+    use_manual = manual or callback_port_busy
     command = [node, "dist/index.js", "--login", "--provider=codex"]
-    if manual:
+    if use_manual:
         command.append("--manual")
     print("starting ChatGPT subscription login via auth2api")
+    if callback_port_busy and not manual:
+        print(
+            f"OAuth callback port 127.0.0.1:{CODEX_CALLBACK_PORT} is already in use; "
+            "falling back to manual callback mode."
+        )
     print("A browser login URL may open. Finish login, then return to this terminal.")
     _run_checked(command, cwd=paths.repo, action="ChatGPT subscription login")
 
@@ -179,6 +187,15 @@ def _run_checked(command: list[str], cwd: Path | None, action: str) -> None:
         raise ManagedAdapterError(f"{action} failed with exit code {exc.returncode}") from exc
     except OSError as exc:
         raise ManagedAdapterError(f"{action} failed: {exc}") from exc
+
+
+def _is_port_in_use(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.bind((host, port))
+        except OSError:
+            return True
+    return False
 
 
 def _has_codex_token(paths: AdapterPaths) -> bool:

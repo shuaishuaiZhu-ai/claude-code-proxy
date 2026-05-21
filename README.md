@@ -268,6 +268,11 @@ save an unusable selection. For `custom`, you still own the adapter process. A
 plain `claude` command is not the same as `ccproxy run`; it starts normal Claude
 Code auth and may show `Not logged in`.
 
+If ChatGPT login exits with `EADDRINUSE` on `127.0.0.1:1455`, another process
+already owns the Codex OAuth callback port. Newer `ccproxy` builds detect this
+before login and fall back to auth2api manual callback mode; paste the full
+`localhost:1455/auth/callback?...` URL from the browser if prompted.
+
 ## Config
 
 Create a user config:
