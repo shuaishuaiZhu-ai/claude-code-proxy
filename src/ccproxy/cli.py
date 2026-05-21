@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(required=True)
 
     init_parser = subparsers.add_parser("init", help="write a default config file")
-    init_parser.add_argument("--profile", default="openai", help="default profile to select")
+    init_parser.add_argument("--profile", default="openai-key", help="default profile to select")
     init_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
     init_parser.set_defaults(func=cmd_init)
 
@@ -189,6 +189,10 @@ def _claude_command(raw_args: list[str]) -> list[str]:
     if args and args[0] == "--":
         args = args[1:]
     if args:
+        if platform.system().lower() == "windows" and args[0].lower() == "claude":
+            claude = _find_claude()
+            if claude:
+                return [claude, *args[1:]]
         return args
     claude = _find_claude()
     if not claude:

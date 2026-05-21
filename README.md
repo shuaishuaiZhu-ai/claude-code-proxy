@@ -1,77 +1,225 @@
 # cc-provider-proxy
 
-`cc-provider-proxy` 是给 Claude Code CLI 使用的本地代理工具，CLI 命令名是
-`ccproxy`。它接收 Claude Code 发出的 Anthropic `/v1/messages` 请求，并把请求转到
-OpenAI-compatible 或 Anthropic-compatible 模型服务。
+![cc-provider-proxy hero](docs/assets/ccproxy-hero.png)
 
-内置 profile：
+`cc-provider-proxy` is a local Claude Code proxy. It exposes an
+Anthropic-compatible `/v1/messages` endpoint for Claude Code CLI, then routes
+the request to OpenAI-compatible or Anthropic-compatible model providers.
 
-- OpenAI API key 模式：`openai-key`
-- ChatGPT 订阅模式：`chatgpt-subscription`，通过本地 external adapter 接入
-- Kimi / Moonshot API
-- 智谱 GLM API
-- MiniMax 中国区和国际区
-- 本地 `custom` external adapter
+The goal is simple: keep Claude Code as your coding interface while choosing the
+model backend through a local profile.
 
-核心不会做网页登录、cookie 抓取或 session 自动化。ChatGPT 订阅、Kimi 订阅、GLM 订阅、
-MiniMax 订阅如果要接入，需要由你自己的 adapter 暴露 OpenAI-compatible endpoint。
+## What Works
 
-## 架构
+| Mode | Profile | Upstream shape | Status |
+| --- | --- | --- | --- |
+| OpenAI API key | `openai-key` | OpenAI Chat Completions | Built in |
+| ChatGPT subscription | `chatgpt-subscription` | Local OpenAI-compatible adapter | Built in profile, adapter required |
+| Kimi / Moonshot API | `kimi` | OpenAI-compatible | Built in |
+| Zhipu GLM API | `zhipu` | OpenAI-compatible | Built in |
+| MiniMax CN | `minimax-cn` | OpenAI-compatible | Built in |
+| MiniMax Global | `minimax-global` | OpenAI-compatible | Built in |
+| MiniMax Anthropic CN | `minimax-cn-anthropic` | Anthropic-compatible | Built in |
+| MiniMax Anthropic Global | `minimax-global-anthropic` | Anthropic-compatible | Built in |
+| Custom subscription adapter | `custom` | Local OpenAI-compatible adapter | Built in profile, adapter required |
 
-```mermaid
-flowchart LR
-  Claude["Claude Code CLI"] -->|"Anthropic /v1/messages"| Proxy["ccproxy local server"]
-  Proxy -->|"OpenAI-compatible"| Providers["OpenAI / Kimi / GLM / MiniMax"]
-  Proxy -->|"Anthropic-compatible"| MMAnthropic["MiniMax Anthropic API"]
-  Proxy -->|"external-adapter"| Adapter["Local subscription adapter"]
-```
+`ccproxy` does not log in to web accounts, scrape browser cookies, or manage
+ChatGPT/Kimi/GLM/MiniMax web sessions. Subscription-style accounts must be
+handled by a local adapter that you run and control. That adapter must expose an
+OpenAI-compatible `/v1/chat/completions` endpoint.
 
-## 安装
+## Quick Start
 
-开发环境直接在仓库根目录运行：
+### 1. Install
 
-```powershell
-$env:PYTHONPATH="src"
-python -m ccproxy --version
-```
-
-正式安装：
+From GitHub:
 
 ```bash
-python -m pip install .
-ccproxy --version
+python -m pip install git+https://github.com/shuaishuaiZhu-ai/cc-provider-proxy.git
 ```
 
-可选 FastAPI 服务模式需要安装项目依赖；没有安装依赖时，`ccproxy serve` 会使用标准库
-HTTP server，仍可跨平台运行。
+For local development from a cloned checkout:
 
-## 初始化配置
+```bash
+python -m pip install -e .
+```
 
-OpenAI API key 模式：
+The default install has no runtime third-party dependencies. The standard
+library server is used by default. Optional FastAPI mode is available with:
+
+```bash
+python -m pip install "git+https://github.com/shuaishuaiZhu-ai/cc-provider-proxy.git"
+python -m pip install fastapi uvicorn
+```
+
+### 2. Create Config
+
+OpenAI API key mode:
 
 ```bash
 ccproxy init --profile openai-key
 ```
 
-ChatGPT 订阅模式：
+MiniMax CN mode:
+
+```bash
+ccproxy init --profile minimax-cn
+```
+
+This writes `~/.ccproxy/config.toml`. To keep config local to a project:
+
+```bash
+ccproxy init --profile openai-key --config ./ccproxy.toml
+```
+
+### 3. Set Provider Key
+
+PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY="your-openai-api-key"
+```
+
+Bash / zsh:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+Common environment variables:
+
+- `OPENAI_API_KEY`
+- `CHATGPT_ADAPTER_API_KEY`
+- `KIMI_API_KEY`
+- `ZHIPU_API_KEY`
+- `MINIMAX_API_KEY`
+- `CCPROXY_CUSTOM_API_KEY`
+
+### 4. Run Claude Code Through The Proxy
+
+One-command mode:
+
+```bash
+ccproxy run --profile openai-key -- claude -p "reply ccproxy-ok"
+```
+
+Two-terminal mode:
+
+```bash
+ccproxy serve --profile openai-key
+```
+
+Then:
+
+```bash
+ANTHROPIC_BASE_URL=http://127.0.0.1:8082 ANTHROPIC_API_KEY=ccproxy claude
+```
+
+Windows PowerShell may block `claude.ps1`. Use the npm `.cmd` shim:
+
+```powershell
+cmd.exe /d /s /c claude --version
+```
+
+`ccproxy run` automatically prefers `claude.cmd` on Windows.
+
+## Test Without A Real API Key
+
+Start the bundled mock OpenAI-compatible provider:
+
+```bash
+python scripts/mock_openai_provider.py --port 8000
+```
+
+In another terminal:
+
+```bash
+ccproxy init --profile custom --config ./mock.toml
+ccproxy run --config ./mock.toml --profile custom -- claude --model sonnet -p "reply ccproxy-ok"
+```
+
+Expected output:
+
+```text
+ccproxy-ok
+```
+
+This verifies the local path:
+
+```mermaid
+flowchart LR
+  Claude["Claude Code CLI"] --> Proxy["ccproxy /v1/messages"]
+  Proxy --> Mock["mock /v1/chat/completions"]
+  Mock --> Proxy
+  Proxy --> Claude
+```
+
+## Provider Notes
+
+### OpenAI API Key
+
+Use `openai-key` when you have an OpenAI platform API key:
+
+```bash
+ccproxy init --profile openai-key
+ccproxy doctor --profile openai-key
+ccproxy test --profile openai-key
+```
+
+`ccproxy test` is local by default. To call the real provider:
+
+```bash
+ccproxy test --profile openai-key --real
+```
+
+### ChatGPT Subscription
+
+Use `chatgpt-subscription` only when you already have a local adapter for your
+ChatGPT subscription:
 
 ```bash
 ccproxy init --profile chatgpt-subscription
 ```
 
-默认会写入：
+The default adapter URL is:
 
 ```text
-~/.ccproxy/config.toml
+http://127.0.0.1:8000/v1/chat/completions
 ```
 
-也可以写到当前目录：
+ChatGPT Plus/Pro/Team subscriptions and OpenAI API billing are separate product
+surfaces. `ccproxy` does not turn a ChatGPT subscription into an OpenAI API key.
+
+### MiniMax
+
+OpenAI-compatible endpoints:
+
+- CN: `https://api.minimaxi.com/v1`
+- Global: `https://api.minimax.io/v1`
+
+Anthropic-compatible endpoints:
+
+- CN: `https://api.minimaxi.com/anthropic`
+- Global: `https://api.minimax.io/anthropic`
+
+Built-in models:
+
+- `MiniMax-M2.7`
+- `MiniMax-M2.7-highspeed`
+- `MiniMax-M2.5`
+
+## Commands
 
 ```bash
-ccproxy init --profile minimax-cn --config ./ccproxy.toml
+ccproxy init --profile openai-key
+ccproxy serve --profile openai-key
+ccproxy run --profile openai-key -- claude -p "reply ccproxy-ok"
+ccproxy doctor --profile openai-key
+ccproxy test --profile openai-key
+ccproxy test --profile openai-key --real
 ```
 
-配置只保存环境变量名，不保存真实 key。
+## Config Shape
 
 ```toml
 default_profile = "openai-key"
@@ -89,133 +237,41 @@ api_key_env = "OPENAI_API_KEY"
 big = "gpt-4.1"
 middle = "gpt-4.1-mini"
 small = "gpt-4.1-nano"
-
-[profiles.chatgpt-subscription]
-type = "external-adapter"
-base_url = "http://127.0.0.1:8000/v1"
-api_key_env = "CHATGPT_ADAPTER_API_KEY"
-
-[profiles.chatgpt-subscription.models]
-big = "chatgpt-big"
-middle = "chatgpt-middle"
-small = "chatgpt-small"
 ```
 
-## Provider Key
+Profile types:
 
-PowerShell：
+- `openai-compatible`: translate Anthropic Messages to Chat Completions.
+- `anthropic-compatible`: forward Anthropic Messages with model/auth mapping.
+- `external-adapter`: same wire shape as OpenAI-compatible, intended for local
+  subscription adapters.
 
-```powershell
-$env:OPENAI_API_KEY="your-openai-api-key"
-$env:CHATGPT_ADAPTER_API_KEY="optional-local-adapter-key"
-$env:MINIMAX_API_KEY="your-minimax-key"
-```
-
-Bash / zsh：
+## Development
 
 ```bash
-export OPENAI_API_KEY="your-openai-api-key"
-export CHATGPT_ADAPTER_API_KEY="optional-local-adapter-key"
-export MINIMAX_API_KEY="your-minimax-key"
+python -m pip install -e .
+python -m unittest discover -s tests
+python -m compileall -q src tests scripts
 ```
 
-常用环境变量：
+The repository intentionally keeps the runtime core dependency-light:
 
-- `OPENAI_API_KEY`
-- `CHATGPT_ADAPTER_API_KEY`
-- `KIMI_API_KEY`
-- `ZHIPU_API_KEY`
-- `MINIMAX_API_KEY`
-- `CCPROXY_CUSTOM_API_KEY`
+- `argparse`, `http.server`, and `urllib` for the default path.
+- Optional `fastapi`/`uvicorn` only for `ccproxy serve --fastapi`.
 
-## 使用 Claude Code
+## Limitations
 
-启动本地代理：
+- Streaming text is supported; complex streaming tool-call deltas are normalized
+  into Anthropic blocks after the OpenAI stream completes.
+- Provider model names change over time. Edit `~/.ccproxy/config.toml` if your
+  provider uses newer model IDs.
+- Real provider tests require the matching environment variable to be set.
 
-```bash
-ccproxy serve --profile openai-key
-```
+## License
 
-另一个终端里让 Claude Code 指向本地代理：
+MIT. See [LICENSE](LICENSE).
 
-```bash
-ANTHROPIC_BASE_URL=http://127.0.0.1:8082 ANTHROPIC_API_KEY=ccproxy claude
-```
-
-Windows PowerShell 下不要直接依赖 `claude.ps1`。如果执行策略拦截，使用：
-
-```powershell
-cmd.exe /d /s /c claude
-```
-
-也可以让 `ccproxy` 自动启动代理并运行 Claude Code：
-
-```bash
-ccproxy run --profile openai-key -- claude -p "reply ccproxy-ok"
-```
-
-Windows 上默认会优先查找 `claude.cmd`。
-
-## OpenAI Key 和 ChatGPT 订阅
-
-OpenAI key 模式直接使用 OpenAI API：
-
-```bash
-ccproxy init --profile openai-key
-ccproxy run --profile openai-key -- claude -p "reply ccproxy-ok"
-```
-
-ChatGPT 订阅模式使用本地 adapter。你的 adapter 需要暴露 OpenAI-compatible endpoint，
-例如 `http://127.0.0.1:8000/v1/chat/completions`。
-
-```bash
-ccproxy init --profile chatgpt-subscription
-ccproxy run --profile chatgpt-subscription -- claude -p "reply ccproxy-ok"
-```
-
-ChatGPT Plus/Pro/Team 订阅和 OpenAI API key/账单不是同一个产品入口。`ccproxy`
-不会直接登录 ChatGPT 网页账号，也不会保存 cookie；它只负责把 Claude Code 请求转给
-你本地 adapter。
-
-## MiniMax
-
-MiniMax OpenAI-compatible：
-
-- 中国区：`https://api.minimaxi.com/v1`
-- 国际区：`https://api.minimax.io/v1`
-
-MiniMax Anthropic-compatible：
-
-- 中国区：`https://api.minimaxi.com/anthropic`
-- 国际区：`https://api.minimax.io/anthropic`
-
-内置 profile：
-
-```bash
-ccproxy init --profile minimax-cn
-ccproxy init --profile minimax-global
-ccproxy init --profile minimax-cn-anthropic
-ccproxy init --profile minimax-global-anthropic
-```
-
-Anthropic-compatible MiniMax profile 不做二次 OpenAI 协议转换，只负责本地启动、鉴权、
-模型映射和转发。
-
-## 诊断和测试
-
-```bash
-ccproxy doctor --profile openai-key
-ccproxy test --profile openai-key
-```
-
-真实 provider smoke test 只有在设置了对应 API key 时才运行：
-
-```bash
-ccproxy test --profile openai-key --real
-```
-
-Windows 本机验证 Claude Code：
-
-```powershell
-cmd.exe /d /s /c claude --version
-```
+Third-party names and platform marks shown in documentation imagery belong to
+their respective owners. This project is independent and is not affiliated with
+OpenAI, Anthropic, MiniMax, Moonshot AI, Zhipu AI, Microsoft, Apple, or Linux
+distributors.

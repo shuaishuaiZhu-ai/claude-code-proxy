@@ -1,0 +1,38 @@
+# Copy this file to ~/.ccproxy/config.toml or pass it to a subcommand:
+#   ccproxy serve --config ./examples/ccproxy.example.toml
+
+default_profile = "openai-key"
+
+[server]
+host = "127.0.0.1"
+port = 8082
+
+[profiles.openai-key]
+type = "openai-compatible"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[profiles.openai-key.models]
+big = "gpt-4.1"
+middle = "gpt-4.1-mini"
+small = "gpt-4.1-nano"
+
+[profiles.chatgpt-subscription]
+type = "external-adapter"
+base_url = "http://127.0.0.1:8000/v1"
+api_key_env = "CHATGPT_ADAPTER_API_KEY"
+
+[profiles.chatgpt-subscription.models]
+big = "chatgpt-big"
+middle = "chatgpt-middle"
+small = "chatgpt-small"
+
+[profiles.minimax-cn]
+type = "openai-compatible"
+base_url = "https://api.minimaxi.com/v1"
+api_key_env = "MINIMAX_API_KEY"
+
+[profiles.minimax-cn.models]
+big = "MiniMax-M2.7"
+middle = "MiniMax-M2.7-highspeed"
+small = "MiniMax-M2.5"

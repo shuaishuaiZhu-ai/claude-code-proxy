@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling>=1.25"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "cc-provider-proxy"
@@ -12,12 +12,13 @@ license = { text = "MIT" }
 authors = [
   { name = "cc-provider-proxy contributors" }
 ]
-dependencies = [
+dependencies = []
+
+[project.optional-dependencies]
+server = [
   "fastapi>=0.115",
   "uvicorn>=0.32",
 ]
-
-[project.optional-dependencies]
 dev = [
   "pytest>=8.0",
   "httpx>=0.27",
@@ -26,5 +27,5 @@ dev = [
 [project.scripts]
 ccproxy = "ccproxy.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/ccproxy"]
+[tool.setuptools.packages.find]
+where = ["src"]
