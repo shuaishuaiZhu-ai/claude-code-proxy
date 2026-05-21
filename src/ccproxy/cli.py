@@ -7,11 +7,13 @@ import importlib.util
 import os
 import platform
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
+from urllib.parse import urlparse
 
 from . import __version__
 from .client import UpstreamClient
@@ -270,6 +272,11 @@ def _run_claude_through_proxy(
     claude_args: list[str],
     expected_text: str | None = None,
 ) -> int:
+    preflight_error = _local_upstream_error(profile)
+    if preflight_error:
+        print(preflight_error, file=sys.stderr)
+        return 2
+
     httpd = build_stdlib_server(server, profile)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -277,7 +284,7 @@ def _run_claude_through_proxy(
         _wait_for_health(server)
         command = _claude_command(claude_args)
         env = build_claude_env(f"http://{server.host}:{server.port}", os.environ)
-        print(f"running through {env['ANTHROPIC_BASE_URL']} with profile {profile.name}")
+        print(f"running through {env['ANTHROPIC_BASE_URL']} with profile {profile.name}", flush=True)
         if expected_text is None:
             return subprocess.call(command, env=env)
         completed = subprocess.run(command, env=env, capture_output=True, text=True)
@@ -372,6 +379,27 @@ def _serve_fastapi(server: ServerConfig, profile: ProviderProfile) -> int:
         return 2
     uvicorn.run(create_fastapi_app(profile), host=server.host, port=server.port)
     return 0
+
+
+def _local_upstream_error(profile: ProviderProfile) -> str | None:
+    parsed = urlparse(profile.base_url)
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    host = parsed.hostname
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        return None
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=1):
+            return None
+    except OSError as exc:
+        return (
+            f"upstream adapter is not reachable: {profile.base_url}\n"
+            f"provider: {profile.name}\n"
+            f"reason: {exc}\n"
+            "Start the local adapter first, or change this profile's base_url.\n"
+            "For a local fake adapter test from this repository, run: python scripts\\mock_openai_provider.py --port 8000"
+        )
 
 
 def _server_from_args(server: ServerConfig, args: argparse.Namespace) -> ServerConfig:

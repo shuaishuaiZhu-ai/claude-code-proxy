@@ -110,6 +110,9 @@ ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
+If the adapter is not running, `ccproxy run` stops before launching Claude Code
+and prints `upstream adapter is not reachable`.
+
 ## macOS / WSL / Linux
 
 ```sh
@@ -219,6 +222,20 @@ Expected output:
 ```text
 ccproxy-ok
 ```
+
+## Troubleshooting
+
+If `ccproxy run -- -p "reply ccproxy-ok"` prints no model answer, check the
+active provider first:
+
+```sh
+ccproxy model current
+```
+
+For `chatgpt-subscription` and `custom`, the local adapter must already be
+running. The default adapter address is `http://127.0.0.1:8000/v1`. A plain
+`claude` command is not the same as `ccproxy run`; it starts normal Claude Code
+auth and may show `Not logged in`.
 
 ## Config
 

@@ -110,6 +110,9 @@ ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
+如果 adapter 没有运行，`ccproxy run` 会在启动 Claude Code 前停止，并打印
+`upstream adapter is not reachable`。
+
 ## macOS / WSL / Linux
 
 ```sh
@@ -219,6 +222,19 @@ ccproxy test --profile custom --claude
 ```text
 ccproxy-ok
 ```
+
+## 排查问题
+
+如果 `ccproxy run -- -p "reply ccproxy-ok"` 没有输出模型回答，先检查当前
+provider：
+
+```sh
+ccproxy model current
+```
+
+对于 `chatgpt-subscription` 和 `custom`，本地 adapter 必须先运行。默认
+adapter 地址是 `http://127.0.0.1:8000/v1`。直接运行 `claude` 不等于
+`ccproxy run`，它会进入 Claude Code 自己的登录流程，可能显示 `Not logged in`。
 
 ## 配置
 

@@ -55,6 +55,12 @@ adapters. If a subscription provider does not expose an official API, run or
 write a local adapter that exposes OpenAI-compatible `/v1/chat/completions`,
 then point a profile at that adapter.
 
+For local adapter profiles such as `chatgpt-subscription` and `custom`,
+`ccproxy run` checks whether the adapter host/port is reachable before starting
+Claude Code. If the adapter is down, it exits with a clear
+`upstream adapter is not reachable` message instead of letting Claude Code fail
+silently.
+
 ## Environment Variables
 
 Set only the key for the profile you use:

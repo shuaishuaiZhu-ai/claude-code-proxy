@@ -1,11 +1,13 @@
 import io
+import socket
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from ccproxy.cli import main
+from ccproxy.cli import _local_upstream_error, main
+from ccproxy.config import ProviderProfile
 
 
 class CliTests(unittest.TestCase):
@@ -21,6 +23,33 @@ class CliTests(unittest.TestCase):
             ["claude", "--bare", "--model", "sonnet", "-p", "reply ccproxy-ok"],
         )
         self.assertEqual(runner.call_args.kwargs["expected_text"], "ccproxy-ok")
+
+    def test_local_upstream_preflight_reports_missing_adapter(self) -> None:
+        profile = ProviderProfile(
+            name="chatgpt-subscription",
+            type="external-adapter",
+            base_url="http://127.0.0.1:1/v1",
+            api_key_env="CHATGPT_ADAPTER_API_KEY",
+        )
+        error = _local_upstream_error(profile)
+        self.assertIsNotNone(error)
+        self.assertIn("upstream adapter is not reachable", error or "")
+
+    def test_local_upstream_preflight_allows_reachable_adapter(self) -> None:
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        try:
+            port = listener.getsockname()[1]
+            profile = ProviderProfile(
+                name="custom",
+                type="external-adapter",
+                base_url=f"http://127.0.0.1:{port}/v1",
+                api_key_env="CCPROXY_CUSTOM_API_KEY",
+            )
+            self.assertIsNone(_local_upstream_error(profile))
+        finally:
+            listener.close()
 
 
 class ProfileCommandTests(unittest.TestCase):
