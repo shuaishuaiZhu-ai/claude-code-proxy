@@ -29,13 +29,16 @@ PRESETS: dict[str, ProviderProfile] = {
     "chatgpt-subscription": ProviderProfile(
         name="chatgpt-subscription",
         type="external-adapter",
-        base_url="http://127.0.0.1:8000/v1",
-        api_key_env="CHATGPT_ADAPTER_API_KEY",
+        base_url="http://127.0.0.1:8317/v1",
+        api_key_env="",
         models={
-            "big": "chatgpt-big",
-            "middle": "chatgpt-middle",
-            "small": "chatgpt-small",
+            "big": "gpt-5.5",
+            "middle": "gpt-5.4",
+            "small": "gpt-5.4-mini",
+            "ChatGPT5.5": "gpt-5.5",
+            "ChatGPT5.4": "gpt-5.4",
         },
+        headers={"Authorization": "Bearer ccproxy-local"},
     ),
     "kimi": ProviderProfile(
         name="kimi",

@@ -19,15 +19,18 @@ small = "gpt-4.1-nano"
 
 [profiles.chatgpt-subscription]
 type = "external-adapter"
-base_url = "http://127.0.0.1:8000/v1"
-api_key_env = "CHATGPT_ADAPTER_API_KEY"
+base_url = "http://127.0.0.1:8317/v1"
+api_key_env = ""
 
 [profiles.chatgpt-subscription.models]
-big = "chatgpt-big"
-middle = "chatgpt-middle"
-small = "chatgpt-small"
-"ChatGPT5.5" = "ChatGPT5.5"
-"ChatGPT5.4" = "ChatGPT5.4"
+big = "gpt-5.5"
+middle = "gpt-5.4"
+small = "gpt-5.4-mini"
+"ChatGPT5.5" = "gpt-5.5"
+"ChatGPT5.4" = "gpt-5.4"
+
+[profiles.chatgpt-subscription.headers]
+Authorization = "Bearer ccproxy-local"
 
 [profiles.kimi]
 type = "openai-compatible"

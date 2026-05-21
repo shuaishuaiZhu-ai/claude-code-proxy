@@ -10,13 +10,16 @@ Anthropic-compatible providers through one local command: `ccproxy`.
 The normal workflow is command-first:
 
 ```cmd
+ccproxy init
 ccproxy model set
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-`ccproxy model set` asks you to choose a provider, then asks you to choose a
-model. You can pick a configured model or type any upstream model name, such as
-`ChatGPT5.5`, `ChatGPT5.4`, or a model exposed by your own adapter.
+`ccproxy init` writes config, runs model selection, and prepares any managed
+adapter required by the selected provider. `ccproxy model set` can be used later
+to switch provider/model. You can pick a configured model or type any upstream
+model name, such as `ChatGPT5.5`, `ChatGPT5.4`, or a model exposed by your own
+adapter.
 
 ```mermaid
 flowchart LR
@@ -82,26 +85,29 @@ If PowerShell blocks `claude.ps1`, `ccproxy run` automatically prefers the npm
 
 ## ChatGPT Subscription Adapter
 
-`chatgpt-subscription` means "route Claude Code to a local adapter that you
-run". It does not log in to ChatGPT, read browser cookies, or turn a ChatGPT
-Plus/Pro/Team subscription into an OpenAI API key.
+`chatgpt-subscription` is a managed adapter mode. `ccproxy` installs and runs
+the local adapter for you using
+[auth2api](https://github.com/AmazingAng/auth2api), then routes Claude Code
+through that adapter.
 
-Run your adapter first. By default, `ccproxy` expects:
+During setup, auth2api opens or prints a ChatGPT/Codex login URL. Finish the
+browser login, then return to the terminal. By default, the managed adapter runs
+at:
 
 ```text
-http://127.0.0.1:8000/v1/chat/completions
+http://127.0.0.1:8317/v1/chat/completions
 ```
 
-Then choose provider and model:
+First-time setup:
 
 ```cmd
-set CHATGPT_ADAPTER_API_KEY=ccproxy
-ccproxy model set
+ccproxy init
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-When prompted, choose `chatgpt-subscription`, then type the model name your
-adapter understands, for example `ChatGPT5.5`.
+When prompted, choose `chatgpt-subscription`, then type the model name you want,
+for example `ChatGPT5.5`. `ccproxy` maps that friendly name to auth2api's
+current `gpt-5.5` model id.
 
 Non-interactive form:
 
@@ -110,8 +116,10 @@ ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-If the adapter is not running, `ccproxy run` stops before launching Claude Code
-and prints `upstream adapter is not reachable`.
+`ccproxy init`, `ccproxy model set`, `ccproxy serve`, and `ccproxy run` all try
+to prepare the managed adapter when `chatgpt-subscription` is active. On
+Windows, the installer uses `npm.cmd` instead of `npm.ps1`, avoiding PowerShell
+execution-policy failures.
 
 ## macOS / WSL / Linux
 
@@ -130,7 +138,7 @@ inside WSL, edit the profile `base_url` to an address reachable from WSL.
 | Mode | Profile | Key env | Notes |
 | --- | --- | --- | --- |
 | OpenAI API key | `openai-key` | `OPENAI_API_KEY` | Direct OpenAI Chat Completions |
-| ChatGPT subscription adapter | `chatgpt-subscription` | `CHATGPT_ADAPTER_API_KEY` | Local OpenAI-compatible adapter required |
+| ChatGPT subscription adapter | `chatgpt-subscription` | managed local key | Managed auth2api adapter |
 | Kimi / Moonshot API | `kimi` | `KIMI_API_KEY` | OpenAI-compatible |
 | Zhipu GLM API | `zhipu` | `ZHIPU_API_KEY` | OpenAI-compatible |
 | MiniMax CN | `minimax-cn` | `MINIMAX_API_KEY` | OpenAI-compatible |
@@ -207,7 +215,7 @@ ccproxy test --profile custom --claude
 ```
 
 The real Claude smoke test launches Claude Code and sends `reply ccproxy-ok`.
-It requires a real provider or a running local adapter for the chosen profile.
+For `chatgpt-subscription`, `ccproxy` starts the managed adapter first.
 
 For a local fake adapter from a cloned checkout:
 
@@ -232,17 +240,18 @@ active provider first:
 ccproxy model current
 ```
 
-For `chatgpt-subscription` and `custom`, the local adapter must already be
-running. The default adapter address is `http://127.0.0.1:8000/v1`. A plain
-`claude` command is not the same as `ccproxy run`; it starts normal Claude Code
-auth and may show `Not logged in`.
+For `chatgpt-subscription`, run `ccproxy init` or `ccproxy model set`; this
+installs auth2api, starts the ChatGPT/Codex login flow, and launches the local
+adapter. For `custom`, you still own the adapter process. A plain `claude`
+command is not the same as `ccproxy run`; it starts normal Claude Code auth and
+may show `Not logged in`.
 
 ## Config
 
 Create a user config:
 
 ```sh
-ccproxy init --profile openai-key
+ccproxy init
 ```
 
 Example profile:
@@ -269,8 +278,8 @@ Profile types:
 
 - `openai-compatible`: translate Anthropic Messages to OpenAI Chat Completions.
 - `anthropic-compatible`: forward Anthropic Messages with auth/model mapping.
-- `external-adapter`: OpenAI-compatible wire shape for local subscription
-  adapters.
+- `external-adapter`: OpenAI-compatible wire shape. `chatgpt-subscription` is
+  managed by `ccproxy`; `custom` is user-managed.
 
 See [docs/providers.md](docs/providers.md) and
 [examples/ccproxy.example.toml](examples/ccproxy.example.toml).

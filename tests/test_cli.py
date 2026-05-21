@@ -29,7 +29,7 @@ class CliTests(unittest.TestCase):
             name="chatgpt-subscription",
             type="external-adapter",
             base_url="http://127.0.0.1:1/v1",
-            api_key_env="CHATGPT_ADAPTER_API_KEY",
+            api_key_env="",
         )
         error = _local_upstream_error(profile)
         self.assertIsNotNone(error)
@@ -50,6 +50,34 @@ class CliTests(unittest.TestCase):
             self.assertIsNone(_local_upstream_error(profile))
         finally:
             listener.close()
+
+    def test_init_runs_model_selection_and_prepares_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.toml"
+            profile_path = Path(tmp) / "active.toml"
+            model_path = Path(tmp) / "models.toml"
+            with patch("ccproxy.cli.active_profile_path", return_value=profile_path):
+                with patch("ccproxy.cli.active_models_path", return_value=model_path):
+                    with patch("ccproxy.cli.ensure_chatgpt_adapter") as adapter:
+                        with redirect_stdout(io.StringIO()):
+                            self.assertEqual(
+                                main(
+                                    [
+                                        "init",
+                                        "--config",
+                                        str(config_path),
+                                        "--profile",
+                                        "chatgpt-subscription",
+                                        "--model",
+                                        "ChatGPT5.5",
+                                    ]
+                                ),
+                                0,
+                            )
+            adapter.assert_called_once()
+            self.assertTrue(config_path.exists())
+            self.assertIn('default_profile = "chatgpt-subscription"', config_path.read_text(encoding="utf-8"))
+            self.assertIn('profile = "chatgpt-subscription"', profile_path.read_text(encoding="utf-8"))
 
 
 class ProfileCommandTests(unittest.TestCase):
@@ -91,7 +119,7 @@ class ModelCommandTests(unittest.TestCase):
                 with patch("ccproxy.cli.active_models_path", return_value=model_path):
                     with redirect_stdout(io.StringIO()):
                         self.assertEqual(
-                            main(["model", "set", "--provider", "chatgpt-subscription", "--model", "ChatGPT5.5"]),
+                            main(["model", "set", "--provider", "chatgpt-subscription", "--model", "ChatGPT5.5", "--no-adapter-start"]),
                             0,
                         )
             self.assertIn('profile = "chatgpt-subscription"', profile_path.read_text(encoding="utf-8"))
@@ -106,7 +134,7 @@ class ModelCommandTests(unittest.TestCase):
                 with patch("ccproxy.cli.active_models_path", return_value=model_path):
                     with patch("builtins.input", side_effect=lambda _prompt: next(answers)):
                         with redirect_stdout(io.StringIO()):
-                            self.assertEqual(main(["model", "set"]), 0)
+                            self.assertEqual(main(["model", "set", "--no-adapter-start"]), 0)
             self.assertIn('"chatgpt-subscription" = "ChatGPT5.4"', model_path.read_text(encoding="utf-8"))
 
     def test_model_current_prints_active_model(self) -> None:
@@ -122,6 +150,20 @@ class ModelCommandTests(unittest.TestCase):
                         self.assertEqual(main(["model", "current"]), 0)
             self.assertIn("chatgpt-subscription", out.getvalue())
             self.assertIn("ChatGPT5.5", out.getvalue())
+
+    def test_model_set_prepares_chatgpt_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            profile_path = Path(tmp) / "active.toml"
+            model_path = Path(tmp) / "models.toml"
+            with patch("ccproxy.cli.active_profile_path", return_value=profile_path):
+                with patch("ccproxy.cli.active_models_path", return_value=model_path):
+                    with patch("ccproxy.cli.ensure_chatgpt_adapter") as adapter:
+                        with redirect_stdout(io.StringIO()):
+                            self.assertEqual(
+                                main(["model", "set", "--provider", "chatgpt-subscription", "--model", "ChatGPT5.5"]),
+                                0,
+                            )
+            adapter.assert_called_once()
 
     def test_model_clear_removes_active_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

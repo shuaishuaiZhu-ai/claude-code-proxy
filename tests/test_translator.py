@@ -14,7 +14,7 @@ class TranslatorTests(unittest.TestCase):
 
     def test_active_upstream_model_overrides_mapping(self) -> None:
         profile = PRESETS["chatgpt-subscription"].with_upstream_model("ChatGPT5.5")
-        self.assertEqual(select_model("claude-3-5-sonnet-latest", profile), "ChatGPT5.5")
+        self.assertEqual(select_model("claude-3-5-sonnet-latest", profile), "gpt-5.5")
 
     def test_custom_alias_maps_before_heuristics(self) -> None:
         profile = PRESETS["chatgpt-subscription"].with_upstream_model(None)

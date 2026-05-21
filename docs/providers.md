@@ -9,7 +9,7 @@ variables; config files only contain endpoint, model, and env-var names.
 | --- | --- | --- | --- |
 | `openai-key` | `openai-compatible` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | `openai` | `openai-compatible` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
-| `chatgpt-subscription` | `external-adapter` | `http://127.0.0.1:8000/v1` | `CHATGPT_ADAPTER_API_KEY` |
+| `chatgpt-subscription` | `external-adapter` | `http://127.0.0.1:8317/v1` | managed local key |
 | `kimi` | `openai-compatible` | `https://api.moonshot.cn/v1` | `KIMI_API_KEY` |
 | `zhipu` | `openai-compatible` | `https://open.bigmodel.cn/api/paas/v4` | `ZHIPU_API_KEY` |
 | `minimax-cn` | `openai-compatible` | `https://api.minimaxi.com/v1` | `MINIMAX_API_KEY` |
@@ -46,20 +46,26 @@ keys.
 
 ## Subscription Boundary
 
-`chatgpt-subscription` means "route Claude Code to a local adapter that you
-run". It does not mean `ccproxy` logs into ChatGPT, reads browser cookies, or
-turns a ChatGPT Plus/Pro/Team plan into an OpenAI API key.
+`chatgpt-subscription` is a managed local adapter profile. `ccproxy init`,
+`ccproxy model set`, `ccproxy serve`, and `ccproxy run` install and start
+[auth2api](https://github.com/AmazingAng/auth2api) when that profile is active.
+On first use, auth2api opens or prints a ChatGPT/Codex login URL. Finish login
+in the browser, then return to the terminal.
+
+This does not turn a ChatGPT Plus/Pro/Team plan into an OpenAI Platform API key.
+The OpenAI API-key route is still `openai-key` with `OPENAI_API_KEY`; the
+subscription route is a local adapter backed by your browser/OAuth login.
 
 The same boundary applies to Kimi, GLM, MiniMax, or other subscription-backed
-adapters. If a subscription provider does not expose an official API, run or
-write a local adapter that exposes OpenAI-compatible `/v1/chat/completions`,
-then point a profile at that adapter.
+adapters. If a subscription provider does not expose an official API and
+`ccproxy` does not have a managed adapter for it, run or write a local adapter
+that exposes OpenAI-compatible `/v1/chat/completions`, then point a profile at
+that adapter.
 
-For local adapter profiles such as `chatgpt-subscription` and `custom`,
-`ccproxy run` checks whether the adapter host/port is reachable before starting
-Claude Code. If the adapter is down, it exits with a clear
-`upstream adapter is not reachable` message instead of letting Claude Code fail
-silently.
+For local adapter profiles, `ccproxy run` checks whether the adapter host/port
+is reachable before starting Claude Code. `chatgpt-subscription` tries to start
+the managed adapter first; `custom` still expects you to own the adapter
+process.
 
 ## Environment Variables
 
@@ -67,12 +73,15 @@ Set only the key for the profile you use:
 
 ```text
 OPENAI_API_KEY=
-CHATGPT_ADAPTER_API_KEY=
 KIMI_API_KEY=
 ZHIPU_API_KEY=
 MINIMAX_API_KEY=
 CCPROXY_CUSTOM_API_KEY=
 ```
+
+`chatgpt-subscription` uses a local managed key internally, so no
+`CHATGPT_ADAPTER_API_KEY` is needed unless you override the profile with your
+own unmanaged adapter.
 
 ## Type Behavior
 
@@ -80,5 +89,6 @@ CCPROXY_CUSTOM_API_KEY=
   request to OpenAI Chat Completions and translates the response back.
 - `anthropic-compatible`: `ccproxy` forwards the Anthropic-shaped request with
   provider auth and model mapping. This is useful for MiniMax Anthropic mode.
-- `external-adapter`: same wire behavior as OpenAI-compatible, but named for
-  local subscription adapters so users know they own the adapter process.
+- `external-adapter`: same wire behavior as OpenAI-compatible. For
+  `chatgpt-subscription`, `ccproxy` manages auth2api. For `custom`, you own the
+  adapter process.

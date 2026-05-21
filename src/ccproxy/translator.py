@@ -9,17 +9,15 @@ from .config import ProviderProfile
 
 def select_model(requested_model: str | None, profile: ProviderProfile) -> str:
     if profile.upstream_model:
-        return profile.upstream_model
+        return _model_alias(profile.upstream_model, profile) or profile.upstream_model
     if not profile.models:
         return requested_model or ""
     if not requested_model:
         return profile.models.get("big") or next(iter(profile.models.values()))
-    if requested_model in profile.models:
-        return profile.models[requested_model]
+    exact = _model_alias(requested_model, profile)
+    if exact:
+        return exact
     model_lower = requested_model.lower()
-    for alias, model in profile.models.items():
-        if alias.lower() == model_lower:
-            return model
     if "haiku" in model_lower or "small" in model_lower:
         return profile.models.get("small") or profile.models.get("middle") or profile.models.get("big") or requested_model
     if "sonnet" in model_lower or "middle" in model_lower:
@@ -27,6 +25,16 @@ def select_model(requested_model: str | None, profile: ProviderProfile) -> str:
     if "opus" in model_lower or "big" in model_lower:
         return profile.models.get("big") or requested_model
     return profile.models.get("big") or requested_model
+
+
+def _model_alias(requested_model: str, profile: ProviderProfile) -> str | None:
+    if requested_model in profile.models:
+        return profile.models[requested_model]
+    model_lower = requested_model.lower()
+    for alias, model in profile.models.items():
+        if alias.lower() == model_lower:
+            return model
+    return None
 
 
 def anthropic_to_openai(body: dict[str, Any], profile: ProviderProfile) -> dict[str, Any]:

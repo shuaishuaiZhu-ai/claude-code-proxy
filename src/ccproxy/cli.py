@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 from typing import Sequence
 import argparse
 import importlib.util
@@ -16,6 +17,7 @@ import urllib.request
 from urllib.parse import urlparse
 
 from . import __version__
+from .adapter import ManagedAdapterError, chatgpt_adapter_status, ensure_chatgpt_adapter
 from .client import UpstreamClient
 from .config import (
     ProviderProfile,
@@ -24,6 +26,7 @@ from .config import (
     active_models_path,
     active_profile_path,
     clear_active_model,
+    default_config_path,
     load_active_model,
     load_active_profile,
     load_config,
@@ -50,8 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(required=True)
 
     init_parser = subparsers.add_parser("init", help="write a default config file")
-    init_parser.add_argument("--profile", default="openai-key", help="default profile to select")
+    init_parser.add_argument("--profile", help="provider profile name; prompts when omitted")
+    init_parser.add_argument("--model", help="upstream model name; prompts when omitted")
     init_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    init_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
+    init_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
+    init_parser.add_argument("--skip-model-set", action="store_true", help="only write config; do not choose provider/model")
     init_parser.set_defaults(func=cmd_init)
 
     profiles_parser = subparsers.add_parser("profiles", help="list configured provider profiles")
@@ -65,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     use_parser = subparsers.add_parser("use", help="set active provider profile")
     use_parser.add_argument("profile", help="profile name to activate")
     use_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    use_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    use_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     use_parser.set_defaults(func=cmd_use)
 
     model_parser = subparsers.add_parser("model", help="choose provider and upstream model")
@@ -74,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     model_set_parser.add_argument("--provider", "--profile", dest="profile", help="provider profile name")
     model_set_parser.add_argument("--model", help="upstream model name")
     model_set_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    model_set_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
+    model_set_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     model_set_parser.set_defaults(func=cmd_model_set)
 
     model_current_parser = model_subparsers.add_parser("current", help="print active provider and upstream model")
@@ -91,6 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--upstream-model", help="temporary upstream model override")
     serve_parser.add_argument("--host")
     serve_parser.add_argument("--port", type=int)
+    serve_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    serve_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     serve_parser.add_argument("--fastapi", action="store_true", help="serve through FastAPI/uvicorn if installed")
     serve_parser.set_defaults(func=cmd_serve)
 
@@ -99,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--upstream-model", help="temporary upstream model override")
     run_parser.add_argument("--host")
     run_parser.add_argument("--port", type=int)
+    run_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    run_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     run_parser.add_argument("claude_args", nargs=argparse.REMAINDER)
     run_parser.set_defaults(func=cmd_run)
 
@@ -112,6 +127,8 @@ def build_parser() -> argparse.ArgumentParser:
     test_parser.add_argument("--upstream-model", help="temporary upstream model override")
     test_parser.add_argument("--host")
     test_parser.add_argument("--port", type=int)
+    test_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
+    test_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
     test_parser.add_argument("--real", action="store_true", help="call the configured real provider")
     test_parser.add_argument("--claude", action="store_true", help="run a real Claude Code CLI smoke test")
     test_parser.add_argument("--prompt", default="reply ccproxy-ok", help="prompt for --claude smoke test")
@@ -131,7 +148,8 @@ def cmd_profiles(args: argparse.Namespace) -> int:
     for name in sorted(config.profiles):
         marker = "*" if name == active else " "
         profile = config.profiles[name]
-        print(f"{marker} {name}\t{profile.type}\t{profile.api_key_env}\t{profile.base_url}")
+        key_env = profile.api_key_env or "managed"
+        print(f"{marker} {name}\t{profile.type}\t{key_env}\t{profile.base_url}")
     return 0
 
 
@@ -147,6 +165,9 @@ def cmd_use(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = select_profile(config, args.profile)
     path = save_active_profile(profile.name, active_profile_path())
+    ready = _ensure_managed_adapter_if_needed(profile, args)
+    if ready != 0:
+        return ready
     print(f"active profile: {profile.name}")
     print(f"state: {path}")
     return 0
@@ -158,6 +179,9 @@ def cmd_model_set(args: argparse.Namespace) -> int:
     model = validate_model_name(args.model) if args.model else _select_model_for_profile(profile)
     profile_path = save_active_profile(profile.name, active_profile_path())
     model_path = save_active_model(profile.name, model, active_models_path())
+    ready = _ensure_managed_adapter_if_needed(profile, args)
+    if ready != 0:
+        return ready
     print(f"active provider: {profile.name}")
     print(f"active model: {model}")
     print(f"profile state: {profile_path}")
@@ -172,7 +196,10 @@ def cmd_model_current(args: argparse.Namespace) -> int:
     effective = select_model(None, profile.with_upstream_model(active_model))
     source = "active" if active_model else "default"
     print(f"provider: {profile.name}")
-    print(f"model: {effective} ({source})")
+    if active_model and active_model != effective:
+        print(f"model: {active_model} -> {effective} ({source})")
+    else:
+        print(f"model: {effective} ({source})")
     return 0
 
 
@@ -224,7 +251,7 @@ def _select_model_for_profile(profile: ProviderProfile) -> str:
                 return validate_model_name(choices[index - 1][1])
         for alias, model in choices:
             if choice == alias or choice.lower() == alias.lower():
-                return validate_model_name(model)
+                return validate_model_name(choice)
         try:
             return validate_model_name(choice)
         except ValueError:
@@ -242,16 +269,58 @@ def _ordered_model_choices(profile: ProviderProfile) -> list[tuple[str, str]]:
     return choices
 
 
-def cmd_init(args: argparse.Namespace) -> int:
-    path = write_default_config(args.config, args.profile)
-    print(f"wrote {path}")
-    print(f"default_profile = {args.profile}")
+def _ensure_managed_adapter_if_needed(profile: ProviderProfile, args: argparse.Namespace) -> int:
+    if getattr(args, "no_adapter_start", False):
+        return 0
+    if profile.name != "chatgpt-subscription":
+        return 0
+    try:
+        ensure_chatgpt_adapter(manual_login=getattr(args, "manual_login", False))
+    except ManagedAdapterError as exc:
+        print(f"failed to prepare ChatGPT subscription adapter: {exc}", file=sys.stderr)
+        return 2
     return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    if args.skip_model_set:
+        default_profile = args.profile or "openai-key"
+        path = write_default_config(args.config, default_profile)
+        print(f"wrote {path}")
+        print(f"default_profile = {default_profile}")
+        return 0
+
+    config = load_config(args.config)
+    profile = _select_profile_for_model_set(config, args.profile)
+    model = validate_model_name(args.model) if args.model else _select_model_for_profile(profile)
+    path = _ensure_config_file(args.config, profile.name)
+    print(f"config: {path}")
+    profile_path = save_active_profile(profile.name, active_profile_path())
+    model_path = save_active_model(profile.name, model, active_models_path())
+    ready = _ensure_managed_adapter_if_needed(profile, args)
+    if ready != 0:
+        return ready
+    print(f"active provider: {profile.name}")
+    print(f"active model: {model}")
+    print(f"profile state: {profile_path}")
+    print(f"model state: {model_path}")
+    print("ready: run ccproxy run -- -p \"reply ccproxy-ok\"")
+    return 0
+
+
+def _ensure_config_file(config_path: str | None, default_profile: str) -> Path:
+    path = default_config_path() if config_path is None else Path(config_path)
+    if path.exists():
+        return path
+    return write_default_config(config_path, default_profile)
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _resolve_profile(config, args)
+    ready = _ensure_managed_adapter_if_needed(profile, args)
+    if ready != 0:
+        return ready
     server = _server_from_args(config.server, args)
     if args.fastapi:
         return _serve_fastapi(server, profile)
@@ -262,6 +331,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _resolve_profile(config, args)
+    ready = _ensure_managed_adapter_if_needed(profile, args)
+    if ready != 0:
+        return ready
     server = _server_from_args(config.server, args)
     return _run_claude_through_proxy(server, profile, args.claude_args)
 
@@ -313,8 +385,20 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"profile: {profile.name} ({profile.type})")
     print(f"base_url: {profile.base_url}")
     print(f"upstream_model: {select_model(None, profile)}")
-    print(f"api_key_env: {profile.api_key_env} ({'set' if os.environ.get(profile.api_key_env) else 'missing'})")
+    if profile.api_key_env:
+        print(f"api_key_env: {profile.api_key_env} ({'set' if os.environ.get(profile.api_key_env) else 'missing'})")
+    else:
+        print("api_key_env: managed")
     print(f"claude: {_find_claude() or 'not found'}")
+    if profile.name == "chatgpt-subscription":
+        status = chatgpt_adapter_status()
+        print("managed_adapter: auth2api")
+        print(f"managed_adapter_url: {status.url}")
+        print(f"managed_adapter_installed: {'yes' if status.installed else 'no'}")
+        print(f"managed_adapter_logged_in: {'yes' if status.logged_in else 'no'}")
+        print(f"managed_adapter_running: {'yes' if status.running else 'no'}")
+        print(f"managed_adapter_repo: {status.repo}")
+        print(f"managed_adapter_log: {status.log}")
     for package in ("fastapi", "uvicorn"):
         print(f"{package}: {'installed' if importlib.util.find_spec(package) else 'missing'}")
     return 0
@@ -324,6 +408,9 @@ def cmd_test(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     profile = _resolve_profile(config, args)
     if args.claude:
+        ready = _ensure_managed_adapter_if_needed(profile, args)
+        if ready != 0:
+            return ready
         server = _server_from_args(config.server, args)
         claude_args = ["claude", "--bare", "--model", "sonnet", "-p", args.prompt]
         return _run_claude_through_proxy(server, profile, claude_args, expected_text="ccproxy-ok")
@@ -393,12 +480,16 @@ def _local_upstream_error(profile: ProviderProfile) -> str | None:
         with socket.create_connection((host, port), timeout=1):
             return None
     except OSError as exc:
+        hint = (
+            "Run ccproxy init or ccproxy model set to install/login/start the managed ChatGPT adapter."
+            if profile.name == "chatgpt-subscription"
+            else "For a local fake adapter test from this repository, run: python scripts\\mock_openai_provider.py --port 8000"
+        )
         return (
             f"upstream adapter is not reachable: {profile.base_url}\n"
             f"provider: {profile.name}\n"
             f"reason: {exc}\n"
-            "Start the local adapter first, or change this profile's base_url.\n"
-            "For a local fake adapter test from this repository, run: python scripts\\mock_openai_provider.py --port 8000"
+            f"{hint}"
         )
 
 

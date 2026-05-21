@@ -15,7 +15,7 @@ class ConfigTests(unittest.TestCase):
     def test_required_provider_profiles_exist(self) -> None:
         required = {
             "openai-key": "OPENAI_API_KEY",
-            "chatgpt-subscription": "CHATGPT_ADAPTER_API_KEY",
+            "chatgpt-subscription": "",
             "kimi": "KIMI_API_KEY",
             "zhipu": "ZHIPU_API_KEY",
             "minimax-cn": "MINIMAX_API_KEY",
@@ -25,6 +25,12 @@ class ConfigTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, PRESETS)
                 self.assertEqual(PRESETS[name].api_key_env, env_name)
+
+    def test_chatgpt_subscription_uses_managed_auth2api_defaults(self) -> None:
+        profile = PRESETS["chatgpt-subscription"]
+        self.assertEqual(profile.base_url, "http://127.0.0.1:8317/v1")
+        self.assertEqual(profile.headers["Authorization"], "Bearer ccproxy-local")
+        self.assertEqual(profile.models["ChatGPT5.5"], "gpt-5.5")
 
     def test_write_and_load_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -38,17 +44,17 @@ class ConfigTests(unittest.TestCase):
 
     def test_render_config_quotes_custom_model_aliases(self) -> None:
         profile = ProviderProfile(
-            name="chatgpt-subscription",
+            name="custom",
             type="external-adapter",
             base_url="http://127.0.0.1:8000/v1",
-            api_key_env="CHATGPT_ADAPTER_API_KEY",
+            api_key_env="CCPROXY_CUSTOM_API_KEY",
             models={"ChatGPT5.5": "ChatGPT5.5"},
         )
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.toml"
-            path.write_text(render_config("chatgpt-subscription", {profile.name: profile}, ServerConfig()), encoding="utf-8")
+            path.write_text(render_config("custom", {profile.name: profile}, ServerConfig()), encoding="utf-8")
             config = load_config(path)
-        self.assertEqual(config.profiles["chatgpt-subscription"].models["ChatGPT5.5"], "ChatGPT5.5")
+        self.assertEqual(config.profiles["custom"].models["ChatGPT5.5"], "ChatGPT5.5")
 
 
 if __name__ == "__main__":

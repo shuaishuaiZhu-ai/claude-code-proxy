@@ -1,5 +1,7 @@
 @echo off
 setlocal
 set "SCRIPT_DIR=%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%run_chatgpt_subscription.ps1" -DoctorOnly %*
+set "REPO_ROOT=%SCRIPT_DIR%.."
+set "PYTHONPATH=%REPO_ROOT%\src;%PYTHONPATH%"
+python -m ccproxy doctor --profile chatgpt-subscription %*
 exit /b %ERRORLEVEL%
