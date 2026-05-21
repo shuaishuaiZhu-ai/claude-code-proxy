@@ -40,6 +40,31 @@ PRESETS: dict[str, ProviderProfile] = {
         },
         headers={"Authorization": "Bearer ccproxy-local"},
     ),
+    "deepseek": ProviderProfile(
+        name="deepseek",
+        type="openai-compatible",
+        base_url="https://api.deepseek.com",
+        api_key_env="DEEPSEEK_API_KEY",
+        models={
+            "big": "deepseek-v4-pro",
+            "middle": "deepseek-v4-flash",
+            "small": "deepseek-v4-flash",
+            "deepseek-chat": "deepseek-chat",
+            "deepseek-reasoner": "deepseek-reasoner",
+        },
+    ),
+    "deepseek-subscription": ProviderProfile(
+        name="deepseek-subscription",
+        type="external-adapter",
+        base_url="http://127.0.0.1:8323/v1",
+        api_key_env="",
+        models={
+            "big": "deepseek-v4-pro",
+            "middle": "deepseek-v4-flash",
+            "small": "deepseek-v4-flash",
+        },
+        headers={"Authorization": "Bearer ccproxy-local"},
+    ),
     "kimi": ProviderProfile(
         name="kimi",
         type="openai-compatible",
@@ -51,6 +76,18 @@ PRESETS: dict[str, ProviderProfile] = {
             "small": "moonshot-v1-8k",
         },
     ),
+    "kimi-subscription": ProviderProfile(
+        name="kimi-subscription",
+        type="external-adapter",
+        base_url="http://127.0.0.1:8321/v1",
+        api_key_env="",
+        models={
+            "big": "moonshot-v1-128k",
+            "middle": "moonshot-v1-32k",
+            "small": "moonshot-v1-8k",
+        },
+        headers={"Authorization": "Bearer ccproxy-local"},
+    ),
     "zhipu": ProviderProfile(
         name="zhipu",
         type="openai-compatible",
@@ -61,6 +98,18 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "glm-4-air",
             "small": "glm-4-flash",
         },
+    ),
+    "zhipu-subscription": ProviderProfile(
+        name="zhipu-subscription",
+        type="external-adapter",
+        base_url="http://127.0.0.1:8322/v1",
+        api_key_env="",
+        models={
+            "big": "glm-4-plus",
+            "middle": "glm-4-air",
+            "small": "glm-4-flash",
+        },
+        headers={"Authorization": "Bearer ccproxy-local"},
     ),
     "minimax-cn": ProviderProfile(
         name="minimax-cn",
@@ -77,6 +126,17 @@ PRESETS: dict[str, ProviderProfile] = {
         name="minimax-global",
         type="openai-compatible",
         base_url="https://api.minimax.io/v1",
+        api_key_env="MINIMAX_API_KEY",
+        models={
+            "big": "MiniMax-M2.7",
+            "middle": "MiniMax-M2.7-highspeed",
+            "small": "MiniMax-M2.5",
+        },
+    ),
+    "minimax-subscription": ProviderProfile(
+        name="minimax-subscription",
+        type="openai-compatible",
+        base_url="https://api.minimaxi.com/v1",
         api_key_env="MINIMAX_API_KEY",
         models={
             "big": "MiniMax-M2.7",

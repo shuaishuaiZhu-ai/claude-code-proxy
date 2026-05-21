@@ -44,9 +44,17 @@ from .config import (
     write_default_config,
 )
 from .env import build_claude_env, ensure_bare_args
-from .provider_setup import open_provider_setup, provider_key_missing, provider_setup_message, setup_for_profile
+from .provider_setup import provider_key_missing, provider_setup_message, setup_for_profile
 from .server import build_stdlib_server, serve_stdlib
+from .secrets import get_api_key, save_api_key
 from .translator import select_model
+
+
+INTERACTIVE_PROFILE_EXCLUDES = {
+    "minimax-cn-anthropic",
+    "minimax-global-anthropic",
+    "openai",
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -67,12 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
     init_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     init_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
-    init_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
+    init_parser.add_argument("--no-open-login", action="store_true", help="do not open a browser during subscription login")
     init_parser.add_argument("--skip-model-set", action="store_true", help="only write config; do not choose provider/model")
     init_parser.set_defaults(func=cmd_init)
 
     profiles_parser = subparsers.add_parser("profiles", help="list configured provider profiles")
     profiles_parser.add_argument("--config", help="config path; defaults to ~/.ccproxy/config.toml")
+    profiles_parser.add_argument("--all", action="store_true", help="include advanced/internal provider profiles")
     profiles_parser.set_defaults(func=cmd_profiles)
 
     current_parser = subparsers.add_parser("current", help="print active provider profile")
@@ -85,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
     use_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     use_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     use_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
-    use_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
+    use_parser.add_argument("--no-open-login", action="store_true", help="do not open a browser during subscription login")
     use_parser.set_defaults(func=cmd_use)
 
     model_parser = subparsers.add_parser("model", help="choose provider and upstream model")
@@ -98,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     model_set_parser.add_argument("--manual-login", action="store_true", help="print login URL and ask for redirected URL")
     model_set_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     model_set_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
-    model_set_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
+    model_set_parser.add_argument("--no-open-login", action="store_true", help="do not open a browser during subscription login")
     model_set_parser.set_defaults(func=cmd_model_set)
 
     model_current_parser = model_subparsers.add_parser("current", help="print active provider and upstream model")
@@ -119,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     serve_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     serve_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
-    serve_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
+    serve_parser.add_argument("--no-open-login", action="store_true", help="do not open a browser during subscription login")
     serve_parser.add_argument("--fastapi", action="store_true", help="serve through FastAPI/uvicorn if installed")
     serve_parser.set_defaults(func=cmd_serve)
 
@@ -131,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     run_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     run_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
-    run_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
+    run_parser.add_argument("--no-open-login", action="store_true", help="do not open a browser during subscription login")
     run_parser.add_argument("claude_args", nargs=argparse.REMAINDER)
     run_parser.set_defaults(func=cmd_run)
 
@@ -148,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     test_parser.add_argument("--manual-login", action="store_true", help="print adapter login URL and ask for redirected URL")
     test_parser.add_argument("--browser-login", action="store_true", help="use browser callback login instead of device-code login")
     test_parser.add_argument("--no-adapter-start", action="store_true", help="do not install/login/start managed adapters")
-    test_parser.add_argument("--no-open-login", action="store_true", help="print setup URL without opening a browser")
+    test_parser.add_argument("--no-open-login", action="store_true", help="do not open a browser during subscription login")
     test_parser.add_argument("--real", action="store_true", help="call the configured real provider")
     test_parser.add_argument("--claude", action="store_true", help="run a real Claude Code CLI smoke test")
     test_parser.add_argument("--prompt", default="reply ccproxy-ok", help="prompt for --claude smoke test")
@@ -165,10 +174,11 @@ def add_common_config_args(parser: argparse.ArgumentParser) -> None:
 def cmd_profiles(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     active = load_active_profile(active_profile_path()) or config.default_profile
-    for name in sorted(config.profiles):
+    names = sorted(config.profiles) if getattr(args, "all", False) else _interactive_profile_names(config)
+    for name in names:
         marker = "*" if name == active else " "
         profile = config.profiles[name]
-        key_env = profile.api_key_env or "managed"
+        key_env = _profile_key_label(profile)
         print(f"{marker} {name}\t{profile.type}\t{key_env}\t{profile.base_url}")
     return 0
 
@@ -237,7 +247,7 @@ def _select_profile_for_model_set(config: ProxyConfig, profile_name: str | None)
         return select_profile(config, profile_name)
 
     active = load_active_profile(active_profile_path()) or config.default_profile
-    names = sorted(config.profiles)
+    names = _interactive_profile_names(config)
     print("Choose provider:")
     for index, name in enumerate(names, 1):
         profile = config.profiles[name]
@@ -253,6 +263,11 @@ def _select_profile_for_model_set(config: ProxyConfig, profile_name: str | None)
         if choice in config.profiles:
             return select_profile(config, choice)
         print("Unknown provider. Choose a listed number or name.")
+
+
+def _interactive_profile_names(config: ProxyConfig) -> list[str]:
+    visible = [name for name in config.profiles if name not in INTERACTIVE_PROFILE_EXCLUDES]
+    return sorted(visible)
 
 
 def _select_model_for_profile(profile: ProviderProfile) -> str:
@@ -295,14 +310,21 @@ def _ensure_provider_ready(profile: ProviderProfile, args: argparse.Namespace) -
         return managed
     if not provider_key_missing(profile):
         return 0
-    if not getattr(args, "no_open_login", False):
-        opened = open_provider_setup(profile)
-        if opened:
-            setup = setup_for_profile(profile)
-            if setup:
-                print(f"opened provider setup page: {setup.url}", file=sys.stderr)
     print(provider_setup_message(profile), file=sys.stderr)
-    return 2
+    pasted = prompt_api_key(profile)
+    if not pasted:
+        return 2
+    path = save_api_key(profile.api_key_env, pasted)
+    print(f"saved API key for {profile.name}: {path}", file=sys.stderr)
+    return 0
+
+
+def prompt_api_key(profile: ProviderProfile) -> str:
+    setup = setup_for_profile(profile)
+    if setup:
+        print(f"Get your API key: {setup.url}", file=sys.stderr)
+    print(f"Paste {profile.api_key_env} for {profile.name}, then press Enter.", file=sys.stderr)
+    return input("API key: ").strip()
 
 
 def _ensure_managed_adapter_if_needed(profile: ProviderProfile, args: argparse.Namespace) -> int:
@@ -426,13 +448,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"base_url: {profile.base_url}")
     print(f"upstream_model: {select_model(None, profile)}")
     if profile.api_key_env:
-        print(f"api_key_env: {profile.api_key_env} ({'set' if os.environ.get(profile.api_key_env) else 'missing'})")
+        if os.environ.get(profile.api_key_env):
+            key_state = "set"
+        elif get_api_key(profile.api_key_env):
+            key_state = "saved"
+        else:
+            key_state = "missing"
+        print(f"api_key_env: {profile.api_key_env} ({key_state})")
         if provider_key_missing(profile):
             setup = setup_for_profile(profile)
             if setup:
                 print(f"provider_setup_url: {setup.url}")
     else:
-        print("api_key_env: managed")
+        print(f"api_key_env: {_profile_key_label(profile)}")
     print(f"claude: {_find_claude() or 'not found'}")
     if profile.name == "chatgpt-subscription":
         status = chatgpt_adapter_status()
@@ -531,11 +559,12 @@ def _local_upstream_error(profile: ProviderProfile) -> str | None:
         with socket.create_connection((host, port), timeout=1):
             return None
     except OSError as exc:
-        hint = (
-            "Run ccproxy init or ccproxy model set to install/login/start the managed ChatGPT adapter."
-            if profile.name == "chatgpt-subscription"
-            else "For a local fake adapter test from this repository, run: python scripts\\mock_openai_provider.py --port 8000"
-        )
+        if profile.name == "chatgpt-subscription":
+            hint = "Run ccproxy init or ccproxy model set to install/login/start the managed ChatGPT adapter."
+        elif profile.name.endswith("-subscription"):
+            hint = "Start the local subscription adapter for this provider, or switch to its API-key provider."
+        else:
+            hint = "For a local fake adapter test from this repository, run: python scripts\\mock_openai_provider.py --port 8000"
         return (
             f"upstream adapter is not reachable: {profile.base_url}\n"
             f"provider: {profile.name}\n"
@@ -564,6 +593,14 @@ def _resolve_profile_name(profile_name: str | None) -> str | None:
     if profile_name:
         return profile_name
     return load_active_profile(active_profile_path())
+
+
+def _profile_key_label(profile: ProviderProfile) -> str:
+    if profile.api_key_env:
+        return profile.api_key_env
+    if profile.name == "chatgpt-subscription":
+        return "managed"
+    return "local-adapter"
 
 
 def _claude_command(raw_args: list[str]) -> list[str]:

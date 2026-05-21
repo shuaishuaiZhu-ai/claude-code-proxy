@@ -16,10 +16,15 @@ class ConfigTests(unittest.TestCase):
         required = {
             "openai-key": "OPENAI_API_KEY",
             "chatgpt-subscription": "",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "deepseek-subscription": "",
             "kimi": "KIMI_API_KEY",
+            "kimi-subscription": "",
             "zhipu": "ZHIPU_API_KEY",
+            "zhipu-subscription": "",
             "minimax-cn": "MINIMAX_API_KEY",
             "minimax-global": "MINIMAX_API_KEY",
+            "minimax-subscription": "MINIMAX_API_KEY",
         }
         for name, env_name in required.items():
             with self.subTest(name=name):
@@ -40,7 +45,14 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.default_profile, "minimax-cn")
             self.assertIn("openai-key", config.profiles)
             self.assertIn("chatgpt-subscription", config.profiles)
+            self.assertIn("deepseek", config.profiles)
             self.assertIn("minimax-cn", config.profiles)
+
+    def test_deepseek_preset_uses_openai_compatible_endpoint(self) -> None:
+        profile = PRESETS["deepseek"]
+        self.assertEqual(profile.type, "openai-compatible")
+        self.assertEqual(profile.base_url, "https://api.deepseek.com")
+        self.assertEqual(profile.models["big"], "deepseek-v4-pro")
 
     def test_render_config_quotes_custom_model_aliases(self) -> None:
         profile = ProviderProfile(

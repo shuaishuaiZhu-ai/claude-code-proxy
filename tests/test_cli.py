@@ -116,6 +116,13 @@ class ProfileCommandTests(unittest.TestCase):
         self.assertIn("chatgpt-subscription", text)
         self.assertIn("kimi", text)
         self.assertIn("zhipu", text)
+        self.assertNotIn("minimax-cn-anthropic", text)
+
+    def test_profiles_all_lists_advanced_profiles(self) -> None:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(main(["profiles", "--all"]), 0)
+        self.assertIn("minimax-cn-anthropic", out.getvalue())
 
     def test_use_sets_active_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -139,36 +146,78 @@ class ProfileCommandTests(unittest.TestCase):
 
 
 class ModelCommandTests(unittest.TestCase):
-    def test_model_set_missing_api_key_opens_setup_and_does_not_save(self) -> None:
+    def test_model_set_missing_api_key_prompts_and_saves_secret(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.toml"
             profile_path = Path(tmp) / "active.toml"
             model_path = Path(tmp) / "models.toml"
-            err = io.StringIO()
             with patch.dict(os.environ, {"USERPROFILE": tmp}, clear=True):
                 with patch("ccproxy.cli.active_profile_path", return_value=profile_path):
                     with patch("ccproxy.cli.active_models_path", return_value=model_path):
-                        with patch("ccproxy.cli.open_provider_setup", return_value=True) as opener:
-                            with redirect_stderr(err), redirect_stdout(io.StringIO()):
+                        with patch("ccproxy.cli.save_api_key") as save_key:
+                            with patch("ccproxy.cli.prompt_api_key", return_value="sk-pasted"):
+                                with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                                    self.assertEqual(
+                                        main(
+                                            [
+                                                "model",
+                                                "set",
+                                                "--config",
+                                                str(config_path),
+                                                "--provider",
+                                                "openai-key",
+                                                "--model",
+                                                "gpt-4.1",
+                                            ]
+                                        ),
+                                        0,
+                                    )
+            save_key.assert_called_once_with("OPENAI_API_KEY", "sk-pasted")
+            self.assertIn('profile = "openai-key"', profile_path.read_text(encoding="utf-8"))
+            self.assertIn('"openai-key" = "gpt-4.1"', model_path.read_text(encoding="utf-8"))
+
+    def test_model_set_missing_api_key_does_not_open_setup_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.toml"
+            with patch.dict(os.environ, {"USERPROFILE": tmp}, clear=True):
+                with patch("ccproxy.cli.prompt_api_key", return_value=""):
+                    with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                        self.assertEqual(
+                            main(
+                                [
+                                    "model",
+                                    "set",
+                                    "--config",
+                                    str(config_path),
+                                    "--provider",
+                                    "openai-key",
+                                    "--model",
+                                    "gpt-4.1",
+                                ]
+                            ),
+                            2,
+                        )
+
+    def test_model_set_interactive_hides_internal_protocol_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.toml"
+            profile_path = Path(tmp) / "active.toml"
+            model_path = Path(tmp) / "models.toml"
+            out = io.StringIO()
+            answers = iter(["minimax-cn", "MiniMax-M2.7"])
+            with patch.dict(os.environ, {"MINIMAX_API_KEY": "sk-test", "USERPROFILE": tmp}, clear=True):
+                with patch("ccproxy.cli.active_profile_path", return_value=profile_path):
+                    with patch("ccproxy.cli.active_models_path", return_value=model_path):
+                        with patch("builtins.input", side_effect=lambda _prompt: next(answers)):
+                            with redirect_stdout(out):
                                 self.assertEqual(
-                                    main(
-                                        [
-                                            "model",
-                                            "set",
-                                            "--config",
-                                            str(config_path),
-                                            "--provider",
-                                            "openai-key",
-                                            "--model",
-                                            "gpt-4.1",
-                                        ]
-                                    ),
-                                    2,
+                                    main(["model", "set", "--config", str(config_path)]),
+                                    0,
                                 )
-            opener.assert_called_once()
-            self.assertIn("OPENAI_API_KEY", err.getvalue())
-            self.assertFalse(profile_path.exists())
-            self.assertFalse(model_path.exists())
+            text = out.getvalue()
+            self.assertIn("minimax-cn", text)
+            self.assertNotIn("minimax-cn-anthropic", text)
+            self.assertNotIn("minimax-global-anthropic", text)
 
     def test_model_set_with_api_key_sets_provider_and_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -178,36 +227,34 @@ class ModelCommandTests(unittest.TestCase):
             with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test", "USERPROFILE": tmp}, clear=True):
                 with patch("ccproxy.cli.active_profile_path", return_value=profile_path):
                     with patch("ccproxy.cli.active_models_path", return_value=model_path):
-                        with patch("ccproxy.cli.open_provider_setup") as opener:
-                            with redirect_stdout(io.StringIO()):
-                                self.assertEqual(
-                                    main(
-                                        [
-                                            "model",
-                                            "set",
-                                            "--config",
-                                            str(config_path),
-                                            "--provider",
-                                            "openai-key",
-                                            "--model",
-                                            "gpt-4.1",
-                                        ]
-                                    ),
-                                    0,
-                                )
-            opener.assert_not_called()
+                        with redirect_stdout(io.StringIO()):
+                            self.assertEqual(
+                                main(
+                                    [
+                                        "model",
+                                        "set",
+                                        "--config",
+                                        str(config_path),
+                                        "--provider",
+                                        "openai-key",
+                                        "--model",
+                                        "gpt-4.1",
+                                    ]
+                                ),
+                                0,
+                            )
             self.assertIn('profile = "openai-key"', profile_path.read_text(encoding="utf-8"))
             self.assertIn('"openai-key" = "gpt-4.1"', model_path.read_text(encoding="utf-8"))
 
-    def test_model_set_missing_api_key_does_not_prompt_for_model(self) -> None:
+    def test_model_set_blank_api_key_does_not_prompt_for_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.toml"
             with patch.dict(os.environ, {"USERPROFILE": tmp}, clear=True):
-                with patch("ccproxy.cli.open_provider_setup", return_value=False):
+                with patch("ccproxy.cli.prompt_api_key", return_value=""):
                     with patch("builtins.input", side_effect=AssertionError("model prompt should not run")):
                         with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
                             self.assertEqual(
-                                main(["model", "set", "--config", str(config_path), "--provider", "openai-key", "--no-open-login"]),
+                                main(["model", "set", "--config", str(config_path), "--provider", "openai-key"]),
                                 2,
                             )
 

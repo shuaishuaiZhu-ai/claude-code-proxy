@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from ccproxy.provider_setup import provider_key_missing, provider_setup_message, setup_for_profile
 from ccproxy.presets import PRESETS
@@ -14,7 +15,7 @@ class ProviderSetupTests(unittest.TestCase):
         self.assertFalse(provider_key_missing(PRESETS["custom"], {}))
 
     def test_known_providers_have_setup_urls(self) -> None:
-        for name in ("openai-key", "kimi", "zhipu", "minimax-cn", "minimax-global"):
+        for name in ("openai-key", "deepseek", "kimi", "zhipu", "minimax-cn", "minimax-global", "minimax-subscription"):
             with self.subTest(name=name):
                 self.assertIsNotNone(setup_for_profile(PRESETS[name]))
 
@@ -22,6 +23,12 @@ class ProviderSetupTests(unittest.TestCase):
         message = provider_setup_message(PRESETS["openai-key"])
         self.assertIn("OPENAI_API_KEY", message)
         self.assertIn("https://platform.openai.com/api-keys", message)
+        self.assertNotIn("open the page", message.lower())
+
+    def test_provider_key_missing_uses_saved_secret_when_environment_is_not_overridden(self) -> None:
+        profile = PRESETS["openai-key"]
+        with patch("ccproxy.provider_setup.get_api_key", return_value="sk-saved"):
+            self.assertFalse(provider_key_missing(profile))
 
 
 if __name__ == "__main__":

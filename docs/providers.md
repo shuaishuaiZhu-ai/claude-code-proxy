@@ -1,7 +1,9 @@
 # Provider Profiles
 
-`ccproxy` keeps provider choice in a named profile. Secrets stay in environment
-variables; config files only contain endpoint, model, and env-var names.
+`ccproxy` keeps provider choice in a named profile. Config files contain
+endpoint, model, and env-var names. API keys can come from environment variables
+or from `~/.ccproxy/secrets.toml`, which is written only when the user pastes a
+key during setup.
 
 ## Built-In Profiles
 
@@ -10,10 +12,15 @@ variables; config files only contain endpoint, model, and env-var names.
 | `openai-key` | `openai-compatible` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | `openai` | `openai-compatible` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | `chatgpt-subscription` | `external-adapter` | `http://127.0.0.1:8317/v1` | managed local key |
+| `deepseek` | `openai-compatible` | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` |
+| `deepseek-subscription` | `external-adapter` | `http://127.0.0.1:8323/v1` | local adapter |
 | `kimi` | `openai-compatible` | `https://api.moonshot.cn/v1` | `KIMI_API_KEY` |
+| `kimi-subscription` | `external-adapter` | `http://127.0.0.1:8321/v1` | local adapter |
 | `zhipu` | `openai-compatible` | `https://open.bigmodel.cn/api/paas/v4` | `ZHIPU_API_KEY` |
+| `zhipu-subscription` | `external-adapter` | `http://127.0.0.1:8322/v1` | local adapter |
 | `minimax-cn` | `openai-compatible` | `https://api.minimaxi.com/v1` | `MINIMAX_API_KEY` |
 | `minimax-global` | `openai-compatible` | `https://api.minimax.io/v1` | `MINIMAX_API_KEY` |
+| `minimax-subscription` | `openai-compatible` | `https://api.minimaxi.com/v1` | `MINIMAX_API_KEY` |
 | `minimax-cn-anthropic` | `anthropic-compatible` | `https://api.minimaxi.com/anthropic` | `MINIMAX_API_KEY` |
 | `minimax-global-anthropic` | `anthropic-compatible` | `https://api.minimax.io/anthropic` | `MINIMAX_API_KEY` |
 | `custom` | `external-adapter` | `http://127.0.0.1:8000/v1` | `CCPROXY_CUSTOM_API_KEY` |
@@ -37,9 +44,9 @@ provider is usable:
 
 - `chatgpt-subscription`: installs/starts the managed auth2api adapter and runs
   the ChatGPT/Codex login flow when no token exists.
-- API-key providers: checks the configured environment variable. If it is
-  missing, `ccproxy` opens the provider setup page, prints the exact environment
-  variable command, and exits without saving an unusable provider/model state.
+- API-key providers: checks the configured environment variable and saved
+  `~/.ccproxy/secrets.toml` key. If both are missing, `ccproxy` prints the API
+  key page and waits for the user to paste a key.
 - `custom`: skips API-key enforcement because local adapters often use their own
   auth scheme or no auth at all.
 
@@ -48,18 +55,12 @@ Non-interactive examples:
 ```sh
 ccproxy model set --provider openai-key --model gpt-4.1
 ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
+ccproxy model set --provider deepseek --model deepseek-v4-pro
 ccproxy model set --provider kimi --model moonshot-v1-128k
 ```
 
 The active profile is stored at `~/.ccproxy/active.toml`. Active model choices
-are stored per provider at `~/.ccproxy/models.toml`. Neither file stores API
-keys.
-
-Use `--no-open-login` when running on a headless server:
-
-```sh
-ccproxy model set --provider openai-key --model gpt-4.1 --no-open-login
-```
+are stored per provider at `~/.ccproxy/models.toml`.
 
 ## Subscription Boundary
 
@@ -86,15 +87,19 @@ process.
 
 ## Environment Variables
 
-Set only the key for the profile you use:
+Set only the key for the profile you use, or paste it when `ccproxy model set`
+asks:
 
 ```text
 OPENAI_API_KEY=
+DEEPSEEK_API_KEY=
 KIMI_API_KEY=
 ZHIPU_API_KEY=
 MINIMAX_API_KEY=
 CCPROXY_CUSTOM_API_KEY=
 ```
+
+Environment variables take priority over saved keys.
 
 `chatgpt-subscription` uses a local managed key internally, so no
 `CHATGPT_ADAPTER_API_KEY` is needed unless you override the profile with your

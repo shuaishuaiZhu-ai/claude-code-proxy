@@ -32,6 +32,18 @@ small = "gpt-5.4-mini"
 [profiles.chatgpt-subscription.headers]
 Authorization = "Bearer ccproxy-local"
 
+[profiles.deepseek]
+type = "openai-compatible"
+base_url = "https://api.deepseek.com"
+api_key_env = "DEEPSEEK_API_KEY"
+
+[profiles.deepseek.models]
+big = "deepseek-v4-pro"
+middle = "deepseek-v4-flash"
+small = "deepseek-v4-flash"
+"deepseek-chat" = "deepseek-chat"
+"deepseek-reasoner" = "deepseek-reasoner"
+
 [profiles.kimi]
 type = "openai-compatible"
 base_url = "https://api.moonshot.cn/v1"
@@ -52,6 +64,45 @@ big = "glm-4-plus"
 middle = "glm-4-air"
 small = "glm-4-flash"
 
+[profiles.deepseek-subscription]
+type = "external-adapter"
+base_url = "http://127.0.0.1:8323/v1"
+api_key_env = ""
+
+[profiles.deepseek-subscription.models]
+big = "deepseek-v4-pro"
+middle = "deepseek-v4-flash"
+small = "deepseek-v4-flash"
+
+[profiles.deepseek-subscription.headers]
+Authorization = "Bearer ccproxy-local"
+
+[profiles.kimi-subscription]
+type = "external-adapter"
+base_url = "http://127.0.0.1:8321/v1"
+api_key_env = ""
+
+[profiles.kimi-subscription.models]
+big = "moonshot-v1-128k"
+middle = "moonshot-v1-32k"
+small = "moonshot-v1-8k"
+
+[profiles.kimi-subscription.headers]
+Authorization = "Bearer ccproxy-local"
+
+[profiles.zhipu-subscription]
+type = "external-adapter"
+base_url = "http://127.0.0.1:8322/v1"
+api_key_env = ""
+
+[profiles.zhipu-subscription.models]
+big = "glm-4-plus"
+middle = "glm-4-air"
+small = "glm-4-flash"
+
+[profiles.zhipu-subscription.headers]
+Authorization = "Bearer ccproxy-local"
+
 [profiles.minimax-cn]
 type = "openai-compatible"
 base_url = "https://api.minimaxi.com/v1"
@@ -68,6 +119,16 @@ base_url = "https://api.minimax.io/v1"
 api_key_env = "MINIMAX_API_KEY"
 
 [profiles.minimax-global.models]
+big = "MiniMax-M2.7"
+middle = "MiniMax-M2.7-highspeed"
+small = "MiniMax-M2.5"
+
+[profiles.minimax-subscription]
+type = "openai-compatible"
+base_url = "https://api.minimaxi.com/v1"
+api_key_env = "MINIMAX_API_KEY"
+
+[profiles.minimax-subscription.models]
 big = "MiniMax-M2.7"
 middle = "MiniMax-M2.7-highspeed"
 small = "MiniMax-M2.5"

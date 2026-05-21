@@ -6,9 +6,9 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
-import os
 
 from .config import ProviderProfile
+from .secrets import get_api_key
 from .translator import anthropic_to_openai, openai_stream_to_anthropic_sse, openai_to_anthropic, select_model
 
 
@@ -96,7 +96,7 @@ class UpstreamClient:
     def _api_key(self) -> str:
         if not self.profile.api_key_env:
             return ""
-        return os.environ.get(self.profile.api_key_env, "")
+        return get_api_key(self.profile.api_key_env)
 
 
 def _join_endpoint(base_url: str, suffix: str) -> str:

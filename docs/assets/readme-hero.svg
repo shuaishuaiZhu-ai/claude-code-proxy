@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-labelledby="title desc">
   <title id="title">claude-code-proxy overview</title>
-  <desc id="desc">Claude Code connects to ccproxy, which routes requests to ChatGPT subscription, OpenAI API, Kimi, Zhipu GLM, MiniMax, or custom adapters.</desc>
+  <desc id="desc">Claude Code connects to ccproxy, which routes requests to ChatGPT subscription, OpenAI API, DeepSeek, Kimi, Zhipu GLM, MiniMax, or custom adapters.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#101820"/>
@@ -31,7 +31,7 @@
   <path d="M112 392 C185 438 291 440 367 383 C444 326 450 231 386 170 C302 89 159 115 99 215 C56 287 52 354 112 392Z" fill="#273b46" opacity="0.6"/>
 
   <text x="72" y="105" class="title">claude-code-proxy</text>
-  <text x="74" y="148" class="subtitle">Use Claude Code with API keys or ChatGPT-style subscription adapters.</text>
+  <text x="74" y="148" class="subtitle">Use Claude Code with API keys, subscriptions, and local adapters.</text>
   <rect x="74" y="182" width="174" height="34" rx="17" fill="url(#accent)"/>
   <text x="95" y="204" class="chip">ccproxy model set</text>
   <rect x="262" y="182" width="152" height="34" rx="17" fill="#334650"/>
@@ -60,9 +60,9 @@
   <rect x="916" y="216" width="242" height="68" class="box"/>
   <text x="952" y="257" class="label">ChatGPT subscription</text>
   <rect x="916" y="300" width="242" height="68" class="box"/>
-  <text x="952" y="341" class="label">Kimi / Zhipu / MiniMax</text>
+  <text x="952" y="341" class="label">DeepSeek / Kimi / Zhipu</text>
   <rect x="916" y="384" width="242" height="68" class="box"/>
-  <text x="952" y="425" class="label">Custom adapters</text>
+  <text x="952" y="425" class="label">MiniMax / Custom</text>
 
   <path d="M777 292 C836 262 850 183 910 166" class="dimline"/>
   <path d="M777 325 C834 319 852 253 910 250" class="dimline"/>
