@@ -2,204 +2,92 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![claude-code-proxy hero](docs/assets/claude-code-proxy-hero.png)
+用一个本地命令 `ccproxy`，让 Claude Code 在多个模型供应商之间切换。
 
-`claude-code-proxy` 让 Claude Code CLI 通过本地 `ccproxy` 命令使用
-OpenAI-compatible 或 Anthropic-compatible 的模型供应商。
+![claude-code-proxy overview](docs/assets/readme-hero.svg)
 
-正常路径是命令优先：
+`claude-code-proxy` 给 Claude Code 启动一个本地 Anthropic-compatible proxy，
+再把请求转到 OpenAI-compatible、Anthropic-compatible 或本地 adapter 后端。
+你不需要每次手动改 `ANTHROPIC_BASE_URL`。
 
-```cmd
-ccproxy init
-ccproxy model set
-ccproxy run -- -p "reply ccproxy-ok"
-```
+## 这个工具解决什么
 
-`ccproxy init` 会写入配置、执行一次模型选择，并为所选 provider 做必要设置。
-之后可以用 `ccproxy model set` 随时切换 provider 和模型。如果 provider 还没
-配置好，`ccproxy` 会先打开对应的登录页或 API key 页面，再保存选择。模型可以
-从配置列表里选，也可以直接输入任意上游模型名，比如 `ChatGPT5.5`、
-`ChatGPT5.4` 或你自己的 adapter 暴露出来的模型名。
+- **一个命令切换供应商：** `ccproxy model set`
+- **OpenAI 两种模式分开：** OpenAI API key 计费和 ChatGPT 订阅登录不是一回事。
+- **Windows/macOS/WSL/Linux 都能用：** Windows 上自动优先使用 `claude.cmd`，
+  避开 PowerShell `.ps1` 执行策略问题。
+- **密钥不进仓库：** API key 只读环境变量；ChatGPT 订阅 token 放在
+  `~/.ccproxy`。
 
-```mermaid
-flowchart LR
-  Claude["Claude Code CLI"] --> Proxy["ccproxy local proxy"]
-  Proxy --> OpenAI["OpenAI API"]
-  Proxy --> ChatGPT["ChatGPT managed adapter"]
-  Proxy --> Kimi["Kimi / Moonshot"]
-  Proxy --> GLM["Zhipu GLM"]
-  Proxy --> MiniMax["MiniMax"]
-```
+## 快速开始
 
-## 安装
+先选你实际拥有的模型入口。
 
-需要 Python 3.11+ 和 Claude Code CLI。
+### ChatGPT 订阅
 
-从 GitHub 安装：
+适合你想用 ChatGPT 订阅账号，而不是 OpenAI API key 账单。
 
 ```sh
 python -m pip install git+https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
+ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-本地 clone 后开发安装：
+首次运行会进入 device-code 登录：终端显示一个 URL 和一次性 code。你在浏览器
+打开 URL、输入 code，然后回到终端等待完成。这个默认流程不使用旧的
+`localhost:1455` browser callback，因此不会卡在 Edge/Chrome 的 Codex consent
+页面。
+
+### OpenAI API Key
+
+适合你有 OpenAI API key，并希望走正常 API 账单。
 
 ```sh
-python -m pip install -e .
+export OPENAI_API_KEY="your-openai-api-key"
+python -m pip install git+https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
+ccproxy model set --provider openai-key --model gpt-4.1
+ccproxy run -- -p "reply ccproxy-ok"
 ```
-
-确认命令可用：
-
-```sh
-ccproxy --version
-```
-
-如果 `ccproxy` 不在 `PATH` 里，可以使用模块形式：
-
-```sh
-python -m ccproxy --version
-python -m ccproxy model set
-```
-
-## Windows 快速开始
 
 PowerShell：
 
 ```powershell
 $env:OPENAI_API_KEY="your-openai-api-key"
-ccproxy init
+ccproxy model set --provider openai-key --model gpt-4.1
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-CMD：
-
-```cmd
-set OPENAI_API_KEY=your-openai-api-key
-ccproxy init
-ccproxy run -- -p "reply ccproxy-ok"
-```
-
-如果 PowerShell 阻止 `claude.ps1`，`ccproxy run` 在 Windows 上会自动优先使用
-npm 的 `claude.cmd` 入口。
-
-## ChatGPT 订阅模式
-
-`chatgpt-subscription` 是托管 adapter 模式。`ccproxy` 会使用
-[auth2api](https://github.com/AmazingAng/auth2api) 为你安装并启动本地 adapter，
-然后把 Claude Code 请求转发到该 adapter。
-
-首次配置时，`ccproxy` 默认使用 OpenAI Codex device-code 登录：终端会显示一个
-验证 URL 和一次性 code，你在任意浏览器里完成登录即可。这个流程不使用旧 Codex
-同意页的 `localhost:1455` callback，因此不会卡在 Edge/Chrome 的 consent 回跳。
-默认托管 adapter 地址是：
-
-```text
-http://127.0.0.1:8317/v1/chat/completions
-```
-
-首次使用：
-
-```cmd
-ccproxy init
-ccproxy run -- -p "reply ccproxy-ok"
-```
-
-提示选择 provider 时选 `chatgpt-subscription`，提示选择模型时可以输入
-`ChatGPT5.5`。`ccproxy` 会把这个友好名称映射到 auth2api 当前使用的
-`gpt-5.5` 模型 ID。
-
-非交互写法：
-
-```cmd
-ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
-ccproxy run -- -p "reply ccproxy-ok"
-```
-
-`ccproxy init`、`ccproxy model set`、`ccproxy serve` 和 `ccproxy run` 都会在
-`chatgpt-subscription` 激活时自动准备托管 adapter。Windows 上安装时会使用
-`npm.cmd`，避免 PowerShell 执行策略拦截 `npm.ps1`。
-
-如果你明确想使用旧的浏览器 callback 流程，可以加 `--browser-login`：
-
-```cmd
-ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5 --browser-login
-```
-
-## macOS / WSL / Linux
+### Kimi、智谱 GLM、MiniMax
 
 ```sh
-export OPENAI_API_KEY="your-openai-api-key"
-ccproxy init
+export KIMI_API_KEY="your-kimi-key"
+ccproxy model set --provider kimi --model moonshot-v1-128k
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-WSL 下建议让 Claude Code、`ccproxy` 和本地 adapter 都运行在同一个环境里。
-如果 adapter 在 Windows 上、`ccproxy` 在 WSL 里，需要把 profile 的
-`base_url` 改成 WSL 能访问到的地址。
+智谱和 MiniMax 分别换成 `ZHIPU_API_KEY` / `zhipu`，或 `MINIMAX_API_KEY` /
+`minimax-cn`。
 
-## Provider Profiles
+## Provider Map
 
-| 模式 | Profile | Key 环境变量 | 说明 |
+![provider modes](docs/assets/readme-provider-map.svg)
+
+| 你手里有什么 | Provider | 模型示例 | 密钥来源 |
 | --- | --- | --- | --- |
-| OpenAI API key | `openai-key` | `OPENAI_API_KEY` | 直连 OpenAI Chat Completions |
-| ChatGPT subscription adapter | `chatgpt-subscription` | 托管本地 key | 托管 auth2api adapter |
-| Kimi / Moonshot API | `kimi` | `KIMI_API_KEY` | OpenAI-compatible |
-| 智谱 GLM API | `zhipu` | `ZHIPU_API_KEY` | OpenAI-compatible |
-| MiniMax 中国区 | `minimax-cn` | `MINIMAX_API_KEY` | OpenAI-compatible |
-| MiniMax 国际区 | `minimax-global` | `MINIMAX_API_KEY` | OpenAI-compatible |
-| MiniMax Anthropic 中国区 | `minimax-cn-anthropic` | `MINIMAX_API_KEY` | Anthropic-compatible passthrough |
-| MiniMax Anthropic 国际区 | `minimax-global-anthropic` | `MINIMAX_API_KEY` | Anthropic-compatible passthrough |
-| 自定义 adapter | `custom` | `CCPROXY_CUSTOM_API_KEY` | 本地 OpenAI-compatible adapter |
+| OpenAI API key | `openai-key` | `gpt-4.1`, `gpt-4.1-mini` | `OPENAI_API_KEY` |
+| ChatGPT 订阅 | `chatgpt-subscription` | `ChatGPT5.5`, `ChatGPT5.4` | 托管 device-code 登录 |
+| Kimi / Moonshot API key | `kimi` | `moonshot-v1-128k` | `KIMI_API_KEY` |
+| 智谱 GLM API key | `zhipu` | `glm-4-plus` | `ZHIPU_API_KEY` |
+| MiniMax 中国区 API key | `minimax-cn` | `MiniMax-M2.7` | `MINIMAX_API_KEY` |
+| MiniMax 国际区 API key | `minimax-global` | `MiniMax-M2.7` | `MINIMAX_API_KEY` |
+| MiniMax Anthropic-compatible | `minimax-cn-anthropic`, `minimax-global-anthropic` | provider native | `MINIMAX_API_KEY` |
+| 自己的 adapter | `custom` | adapter 暴露什么就用什么 | `CCPROXY_CUSTOM_API_KEY` 或本地策略 |
 
-## 模型命令
+## 工作方式
 
-交互式：
-
-```sh
-ccproxy model set
-```
-
-执行顺序是：
-
-1. 选择 provider
-2. 如果 provider 未配置，先完成 provider 设置或登录
-3. 选择模型
-4. 保存当前 provider/model
-
-`chatgpt-subscription` 会在第 2 步执行托管 auth2api 登录和启动流程。
-`openai-key`、`kimi`、`zhipu`、`minimax-cn` 等 API key provider 会在缺少
-环境变量时打开对应控制台，并打印需要执行的环境变量命令。`ccproxy` 不会把
-API key 写入项目文件。
-
-非交互式：
-
-```sh
-ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
-ccproxy model current
-ccproxy model clear
-```
-
-如果在无图形界面环境，或者不希望自动打开浏览器：
-
-```sh
-ccproxy model set --provider openai-key --model gpt-4.1 --no-open-login
-```
-
-只覆盖本次运行，不保存：
-
-```sh
-ccproxy run --upstream-model ChatGPT5.4 -- -p "reply ccproxy-ok"
-```
-
-状态文件：
-
-- `~/.ccproxy/active.toml`：当前 provider profile
-- `~/.ccproxy/models.toml`：每个 provider 当前选择的上游模型
-
-这两个文件都不会保存上游 API key。
-
-## Claude Code 环境变量
-
-`ccproxy run` 启动 Claude Code 时，会给子进程设置：
+Claude Code 发送 Anthropic Messages API 请求。`ccproxy` 在本地启动一个
+Anthropic-compatible endpoint，把请求转换或透传到上游，并用干净的子进程环境启动
+Claude Code：
 
 ```text
 ANTHROPIC_BASE_URL=http://127.0.0.1:8082
@@ -207,83 +95,111 @@ ANTHROPIC_API_KEY=ccproxy
 ANTHROPIC_AUTH_TOKEN=ccproxy
 ```
 
-这样可以避免用户已有的真实 Anthropic key 被带入 proxy 运行。
+这样可以避免你 shell 里已有的真实 Anthropic key 被带入 proxy 运行。
 
-## Smoke Test
+## ChatGPT 订阅登录
 
-本地 translator 测试：
+![ChatGPT subscription login flow](docs/assets/readme-login-flow.svg)
 
-```sh
-ccproxy test
-```
-
-真实 Claude Code smoke test：
+`chatgpt-subscription` 默认使用 OpenAI Codex device-code 登录：
 
 ```sh
-ccproxy test --profile custom --claude
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ```
 
-真实 Claude smoke test 会启动 Claude Code，并发送 `reply ccproxy-ok`。
-`chatgpt-subscription` 会先启动托管 adapter。
-
-如果是 clone 仓库后用本地假 adapter 测试：
-
-```cmd
-python scripts\mock_openai_provider.py --port 8000
-ccproxy model set --provider custom --model custom-big
-ccproxy test --profile custom --claude
-```
-
-期望输出：
+终端会显示类似：
 
 ```text
-ccproxy-ok
+Open this URL in your browser and enter the one-time code:
+https://auth.openai.com/codex/device
+Code: ABCD-1234
 ```
+
+打开 URL，输入 code，然后等终端继续。这个流程不使用 `localhost:1455` callback。
+
+如果你明确要测试旧的 browser callback 流程，可以显式打开：
+
+```sh
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5 --browser-login
+```
+
+只有在你专门排查旧 Codex consent 页面或 callback 行为时，才建议使用
+`--browser-login`。
+
+## 常用命令
+
+```sh
+ccproxy init
+ccproxy model set
+ccproxy model current
+ccproxy run -- -p "reply ccproxy-ok"
+ccproxy doctor --profile chatgpt-subscription
+ccproxy test --profile custom --claude
+```
+
+`ccproxy model set` 是主入口：选择 provider，必要时完成设置或登录，选择模型，
+然后把当前 provider/model 保存到 `~/.ccproxy`。
+
+状态文件：
+
+- `~/.ccproxy/active.toml`：当前 provider profile
+- `~/.ccproxy/models.toml`：每个 provider 当前选择的上游模型
+- `~/.ccproxy/adapters/auth2api/auth/`：托管 ChatGPT 订阅 token
+
+这些状态文件不会保存上游 API key。
+
+## 从源码安装
+
+```sh
+git clone https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
+cd claude-code-proxy
+python -m pip install -e .
+ccproxy --version
+```
+
+如果 `ccproxy` 不在 `PATH`：
+
+```sh
+python -m ccproxy model set
+```
+
+## 平台说明
+
+| 平台 | 建议 |
+| --- | --- |
+| Windows PowerShell | 正常使用 `ccproxy`。`ccproxy run` 会优先用 `claude.cmd`，避开 `.ps1` 执行策略。 |
+| Windows CMD | API-key 模式用 `set OPENAI_API_KEY=...`。 |
+| macOS / Linux | API-key 模式用 `export OPENAI_API_KEY=...` 或对应 provider 变量。 |
+| WSL | 尽量让 Claude Code、`ccproxy`、本地 adapter 都在同一个环境里运行。 |
+| 远程/headless | ChatGPT 订阅优先用 device-code；API-key 设置页可用 `--no-open-login`。 |
 
 ## 排查问题
 
-如果 `ccproxy run -- -p "reply ccproxy-ok"` 没有输出模型回答，先检查当前
-provider：
-
-```sh
-ccproxy model current
-```
-
-对于 `chatgpt-subscription`，运行 `ccproxy init` 或 `ccproxy model set`；这会
-安装 auth2api、启动 ChatGPT/Codex device-code 登录流程，并启动本地 adapter。
-对于 API key provider，运行 `ccproxy model set`；如果缺少必要环境变量，它会打开对应设置页，
-并拒绝保存一个不可用的选择。对于 `custom`，adapter 进程仍然由你自己管理。
-直接运行 `claude` 不等于 `ccproxy run`，它会进入 Claude Code 自己的登录流程，
-可能显示 `Not logged in`。
-
-如果浏览器停在“使用 ChatGPT 登录到 Codex”的同意页，或者点“继续”后一直转圈，
-说明你在旧的 browser callback 流程里。停止这次登录，不带 `--browser-login`
-重新运行即可使用默认 device-code 登录。也可以运行下面命令检查状态：
+先跑：
 
 ```sh
 ccproxy doctor --profile chatgpt-subscription
 ```
 
-`chatgpt_auth_https: ... cloudflare_challenge` 表示卡点发生在 OpenAI/Codex
-网页登录阶段，还没有跳回本地 `localhost` callback；此时 proxy 收不到任何东西。
-优先使用默认 device-code 登录，或检查浏览器扩展、隐私/广告拦截、系统代理或 VPN。
-`codex_callback_port_1455: busy` 只和 `--browser-login` 有关；device-code 登录
-不使用该端口。
+常见现象：
 
-如果 ChatGPT 登录因为 `127.0.0.1:1455` 上的 `EADDRINUSE` 很快退出，说明
-Codex OAuth 回调端口已经被其他进程占用。新版 `ccproxy` 会在登录前检测该端口，
-发现占用后自动切到 auth2api 的 manual callback 模式；如果终端提示粘贴 URL，
-把浏览器地址栏里完整的 `localhost:1455/auth/callback?...` 地址粘贴回去即可。
+| 现象 | 含义 | 处理 |
+| --- | --- | --- |
+| Claude Code 显示 `Not logged in` | 你直接运行了 `claude`，不是通过 `ccproxy run`。 | 用 `ccproxy run -- -p "reply ccproxy-ok"`。 |
+| 浏览器卡在 Codex consent 页面 | 你在旧 browser callback 流程里。 | 停止它，不带 `--browser-login` 重新运行。 |
+| `codex_callback_port_1455: busy` | 旧 callback 端口被其他应用占用。 | device-code 登录不受影响；只有 `--browser-login` 才需要管它。 |
+| API-key provider 拒绝保存 | 必需环境变量缺失。 | 设置 `OPENAI_API_KEY`、`KIMI_API_KEY`、`ZHIPU_API_KEY` 或 `MINIMAX_API_KEY`。 |
+| custom adapter 连不上 | `custom` 由你自己管理进程。 | 启动 adapter，并确认 profile 的 `base_url` 可访问。 |
 
 ## 配置
 
-创建用户配置：
+创建或刷新用户配置：
 
 ```sh
 ccproxy init
 ```
 
-配置示例：
+最小 profile 示例：
 
 ```toml
 default_profile = "openai-key"
@@ -305,8 +221,9 @@ small = "gpt-4.1-nano"
 
 Profile 类型：
 
-- `openai-compatible`：把 Anthropic Messages 请求转换成 OpenAI Chat Completions。
-- `anthropic-compatible`：按 Anthropic 形态转发，只做鉴权和模型映射。
+- `openai-compatible`：把 Anthropic Messages 请求转换成 OpenAI Chat
+  Completions。
+- `anthropic-compatible`：按 Anthropic 形态透传，只做鉴权和模型映射。
 - `external-adapter`：OpenAI-compatible wire shape。`chatgpt-subscription`
   由 `ccproxy` 托管；`custom` 由用户自己管理。
 
@@ -317,7 +234,7 @@ Profile 类型：
 
 ```sh
 python -m pip install -e .
-python -m unittest discover -s tests
+python -m unittest discover -s tests -v
 python -m compileall -q src tests scripts
 ```
 
@@ -331,3 +248,7 @@ ccproxy serve --fastapi
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+第三方名称、平台标识和文档素材归各自权利方所有。本项目独立维护，不隶属于
+OpenAI、Anthropic、MiniMax、Moonshot AI、Zhipu AI、Microsoft、Apple 或 Linux
+发行版。

@@ -2,212 +2,94 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-![claude-code-proxy hero](docs/assets/claude-code-proxy-hero.png)
+Claude Code provider switching, wrapped in one local command: `ccproxy`.
 
-`claude-code-proxy` lets Claude Code CLI use OpenAI-compatible or
-Anthropic-compatible providers through one local command: `ccproxy`.
+![claude-code-proxy overview](docs/assets/readme-hero.svg)
 
-The normal workflow is command-first:
+`claude-code-proxy` lets Claude Code talk to OpenAI-compatible,
+Anthropic-compatible, and local adapter backends without hand-editing Claude
+Code environment variables every time you switch models.
 
-```cmd
-ccproxy init
-ccproxy model set
-ccproxy run -- -p "reply ccproxy-ok"
-```
+## Why This Exists
 
-`ccproxy init` writes config, runs model selection, and prepares the selected
-provider. `ccproxy model set` can be used later to switch provider/model. If a
-provider is not configured yet, `ccproxy` opens the relevant login or API-key
-page before saving the selection. You can pick a configured model or type any
-upstream model name, such as `ChatGPT5.5`, `ChatGPT5.4`, or a model exposed by
-your own adapter.
+- **One command to switch providers:** `ccproxy model set`.
+- **Two OpenAI paths:** OpenAI API key billing and ChatGPT subscription login are
+  separate modes.
+- **Works on Windows, macOS, WSL, and Linux:** Windows uses `claude.cmd` instead
+  of the PowerShell `.ps1` shim.
+- **Secrets stay outside the repository:** API keys are read from environment
+  variables. ChatGPT subscription tokens live under `~/.ccproxy`.
 
-```mermaid
-flowchart LR
-  Claude["Claude Code CLI"] --> Proxy["ccproxy local proxy"]
-  Proxy --> OpenAI["OpenAI API"]
-  Proxy --> ChatGPT["ChatGPT local adapter"]
-  Proxy --> Kimi["Kimi / Moonshot"]
-  Proxy --> GLM["Zhipu GLM"]
-  Proxy --> MiniMax["MiniMax"]
-```
+## Quick Start
 
-## Install
+Pick the path that matches how you pay for the model.
 
-Requires Python 3.11+ and Claude Code CLI.
+### ChatGPT Subscription
 
-From GitHub:
+Use this when you want Claude Code to use a ChatGPT subscription account instead
+of an OpenAI API key.
 
 ```sh
 python -m pip install git+https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
+ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-From a cloned checkout:
+The first command run starts a device-code login. Open the printed URL, enter
+the one-time code, and return to the terminal. This default flow avoids the
+older `localhost:1455` browser callback that can hang in Edge, Chrome, WSL, or
+multi-window setups.
+
+### OpenAI API Key
+
+Use this when you have an OpenAI API key and want normal API billing.
 
 ```sh
-python -m pip install -e .
+export OPENAI_API_KEY="your-openai-api-key"
+python -m pip install git+https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
+ccproxy model set --provider openai-key --model gpt-4.1
+ccproxy run -- -p "reply ccproxy-ok"
 ```
-
-Check the command:
-
-```sh
-ccproxy --version
-```
-
-If `ccproxy` is not on `PATH`, use the module form:
-
-```sh
-python -m ccproxy --version
-python -m ccproxy model set
-```
-
-## Windows Quick Start
 
 PowerShell:
 
 ```powershell
 $env:OPENAI_API_KEY="your-openai-api-key"
-ccproxy model set
-ccproxy model current
+ccproxy model set --provider openai-key --model gpt-4.1
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-CMD:
-
-```cmd
-set OPENAI_API_KEY=your-openai-api-key
-ccproxy model set
-ccproxy model current
-ccproxy run -- -p "reply ccproxy-ok"
-```
-
-If PowerShell blocks `claude.ps1`, `ccproxy run` automatically prefers the npm
-`claude.cmd` shim on Windows.
-
-## ChatGPT Subscription Adapter
-
-`chatgpt-subscription` is a managed adapter mode. `ccproxy` installs and runs
-the local adapter for you using
-[auth2api](https://github.com/AmazingAng/auth2api), then routes Claude Code
-through that adapter.
-
-During setup, `ccproxy` uses OpenAI Codex device-code login by default. It
-prints a verification URL and one-time code, then waits while you finish login
-in any browser. This avoids the fragile `localhost:1455` browser callback used
-by the older Codex consent flow. By default, the managed adapter runs at:
-
-```text
-http://127.0.0.1:8317/v1/chat/completions
-```
-
-First-time setup:
-
-```cmd
-ccproxy init
-ccproxy run -- -p "reply ccproxy-ok"
-```
-
-When prompted, choose `chatgpt-subscription`, then type the model name you want,
-for example `ChatGPT5.5`. `ccproxy` maps that friendly name to auth2api's
-current `gpt-5.5` model id.
-
-Non-interactive form:
-
-```cmd
-ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
-ccproxy run -- -p "reply ccproxy-ok"
-```
-
-`ccproxy init`, `ccproxy model set`, `ccproxy serve`, and `ccproxy run` all try
-to prepare the managed adapter when `chatgpt-subscription` is active. On
-Windows, the installer uses `npm.cmd` instead of `npm.ps1`, avoiding PowerShell
-execution-policy failures.
-
-To force the older browser callback flow, add `--browser-login`. Use this only
-when you specifically want the Codex consent page and `localhost:1455` callback
-behavior:
-
-```cmd
-ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5 --browser-login
-```
-
-## macOS / WSL / Linux
+### Kimi, Zhipu GLM, or MiniMax
 
 ```sh
-export OPENAI_API_KEY="your-openai-api-key"
-ccproxy model set
+export KIMI_API_KEY="your-kimi-key"
+ccproxy model set --provider kimi --model moonshot-v1-128k
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-For WSL, keep Claude Code, `ccproxy`, and any local adapter in the same
-environment when possible. If your adapter runs on Windows and `ccproxy` runs
-inside WSL, edit the profile `base_url` to an address reachable from WSL.
+Replace `KIMI_API_KEY` and the provider name with `ZHIPU_API_KEY` / `zhipu` or
+`MINIMAX_API_KEY` / `minimax-cn`.
 
-## Provider Profiles
+## Provider Map
 
-| Mode | Profile | Key env | Notes |
+![provider modes](docs/assets/readme-provider-map.svg)
+
+| What you have | Provider | Model examples | Secret source |
 | --- | --- | --- | --- |
-| OpenAI API key | `openai-key` | `OPENAI_API_KEY` | Direct OpenAI Chat Completions |
-| ChatGPT subscription adapter | `chatgpt-subscription` | managed local key | Managed auth2api adapter |
-| Kimi / Moonshot API | `kimi` | `KIMI_API_KEY` | OpenAI-compatible |
-| Zhipu GLM API | `zhipu` | `ZHIPU_API_KEY` | OpenAI-compatible |
-| MiniMax CN | `minimax-cn` | `MINIMAX_API_KEY` | OpenAI-compatible |
-| MiniMax Global | `minimax-global` | `MINIMAX_API_KEY` | OpenAI-compatible |
-| MiniMax Anthropic CN | `minimax-cn-anthropic` | `MINIMAX_API_KEY` | Anthropic-compatible passthrough |
-| MiniMax Anthropic Global | `minimax-global-anthropic` | `MINIMAX_API_KEY` | Anthropic-compatible passthrough |
-| Custom adapter | `custom` | `CCPROXY_CUSTOM_API_KEY` | Local OpenAI-compatible adapter |
+| OpenAI API key | `openai-key` | `gpt-4.1`, `gpt-4.1-mini` | `OPENAI_API_KEY` |
+| ChatGPT subscription | `chatgpt-subscription` | `ChatGPT5.5`, `ChatGPT5.4` | managed device-code login |
+| Kimi / Moonshot API key | `kimi` | `moonshot-v1-128k` | `KIMI_API_KEY` |
+| Zhipu GLM API key | `zhipu` | `glm-4-plus` | `ZHIPU_API_KEY` |
+| MiniMax CN API key | `minimax-cn` | `MiniMax-M2.7` | `MINIMAX_API_KEY` |
+| MiniMax Global API key | `minimax-global` | `MiniMax-M2.7` | `MINIMAX_API_KEY` |
+| MiniMax Anthropic-compatible | `minimax-cn-anthropic`, `minimax-global-anthropic` | provider native | `MINIMAX_API_KEY` |
+| Your own adapter | `custom` | whatever it exposes | `CCPROXY_CUSTOM_API_KEY` or local policy |
 
-## Model Commands
+## How It Works
 
-Interactive:
-
-```sh
-ccproxy model set
-```
-
-The setup order is:
-
-1. choose provider
-2. configure provider if needed
-3. choose model
-4. save active provider/model
-
-For `chatgpt-subscription`, step 2 runs the managed auth2api login/start flow.
-For API-key providers such as `openai-key`, `kimi`, `zhipu`, and `minimax-cn`,
-step 2 opens the provider console if the required environment variable is
-missing, then prints the exact environment variable command to run. `ccproxy`
-does not save API keys to project files.
-
-Non-interactive:
-
-```sh
-ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
-ccproxy model current
-ccproxy model clear
-```
-
-If you are on a headless machine or do not want a browser to open:
-
-```sh
-ccproxy model set --provider openai-key --model gpt-4.1 --no-open-login
-```
-
-One-off override without saving:
-
-```sh
-ccproxy run --upstream-model ChatGPT5.4 -- -p "reply ccproxy-ok"
-```
-
-State files:
-
-- `~/.ccproxy/active.toml`: active provider profile
-- `~/.ccproxy/models.toml`: active upstream model per provider
-
-Neither file stores API keys.
-
-## Claude Code Environment
-
-When `ccproxy run` starts Claude Code, it sets these child-process variables:
+Claude Code speaks the Anthropic Messages API. `ccproxy` starts a local
+Anthropic-compatible endpoint, translates or forwards the request, and then runs
+Claude Code with a clean child-process environment:
 
 ```text
 ANTHROPIC_BASE_URL=http://127.0.0.1:8082
@@ -215,98 +97,114 @@ ANTHROPIC_API_KEY=ccproxy
 ANTHROPIC_AUTH_TOKEN=ccproxy
 ```
 
-This prevents an existing real Anthropic key from leaking into a proxy run.
+That keeps any real Anthropic credentials in your shell from leaking into a
+proxy run.
 
-Two-terminal mode is also supported:
+## ChatGPT Subscription Login
 
-```sh
-ccproxy serve --profile openai-key
-```
+![ChatGPT subscription login flow](docs/assets/readme-login-flow.svg)
 
-Then run Claude Code with the same endpoint:
-
-```sh
-ANTHROPIC_BASE_URL=http://127.0.0.1:8082 ANTHROPIC_API_KEY=ccproxy ANTHROPIC_AUTH_TOKEN=ccproxy claude --bare
-```
-
-## Smoke Tests
-
-Local translator test:
+The default `chatgpt-subscription` flow uses OpenAI Codex device-code login:
 
 ```sh
-ccproxy test
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5
 ```
 
-Real Claude Code smoke test:
-
-```sh
-ccproxy test --profile custom --claude
-```
-
-The real Claude smoke test launches Claude Code and sends `reply ccproxy-ok`.
-For `chatgpt-subscription`, `ccproxy` starts the managed adapter first.
-
-For a local fake adapter from a cloned checkout:
-
-```cmd
-python scripts\mock_openai_provider.py --port 8000
-ccproxy model set --provider custom --model custom-big
-ccproxy test --profile custom --claude
-```
-
-Expected output:
+You will see:
 
 ```text
-ccproxy-ok
+Open this URL in your browser and enter the one-time code:
+https://auth.openai.com/codex/device
+Code: ABCD-1234
 ```
+
+Open the URL, enter the code, and wait for the terminal to continue. No
+`localhost:1455` callback is used.
+
+If you explicitly need the older browser callback flow, opt in:
+
+```sh
+ccproxy model set --provider chatgpt-subscription --model ChatGPT5.5 --browser-login
+```
+
+Use `--browser-login` only when you specifically want to test or debug the old
+Codex consent-page flow.
+
+## Commands You Will Actually Use
+
+```sh
+ccproxy init
+ccproxy model set
+ccproxy model current
+ccproxy run -- -p "reply ccproxy-ok"
+ccproxy doctor --profile chatgpt-subscription
+ccproxy test --profile custom --claude
+```
+
+`ccproxy model set` is the main switchboard. It selects a provider, prepares the
+provider if needed, asks for a model, and saves the active provider/model under
+`~/.ccproxy`.
+
+State files:
+
+- `~/.ccproxy/active.toml`: active provider profile
+- `~/.ccproxy/models.toml`: active upstream model per provider
+- `~/.ccproxy/adapters/auth2api/auth/`: managed ChatGPT subscription tokens
+
+API keys are not written to those state files.
+
+## Install From Source
+
+```sh
+git clone https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
+cd claude-code-proxy
+python -m pip install -e .
+ccproxy --version
+```
+
+If `ccproxy` is not on `PATH`, use:
+
+```sh
+python -m ccproxy model set
+```
+
+## Platform Notes
+
+| Platform | Recommendation |
+| --- | --- |
+| Windows PowerShell | Use normal `ccproxy` commands. `ccproxy run` prefers `claude.cmd` to avoid `.ps1` execution-policy failures. |
+| Windows CMD | Use `set OPENAI_API_KEY=...` for API-key modes. |
+| macOS / Linux | Use `export OPENAI_API_KEY=...` or the provider-specific key variable. |
+| WSL | Keep Claude Code, `ccproxy`, and local adapters in the same environment when possible. |
+| Remote/headless | Prefer ChatGPT device-code login or `--no-open-login` for API-key setup pages. |
 
 ## Troubleshooting
 
-If `ccproxy run -- -p "reply ccproxy-ok"` prints no model answer, check the
-active provider first:
-
-```sh
-ccproxy model current
-```
-
-For `chatgpt-subscription`, run `ccproxy init` or `ccproxy model set`; this
-installs auth2api, starts the ChatGPT/Codex device-code login flow, and launches
-the local adapter. For API-key providers, run `ccproxy model set`; if the required
-environment variable is missing, it opens the provider setup page and refuses to
-save an unusable selection. For `custom`, you still own the adapter process. A
-plain `claude` command is not the same as `ccproxy run`; it starts normal Claude
-Code auth and may show `Not logged in`.
-
-If the browser stays on the "Sign in with ChatGPT to Codex" consent page, or the
-continue button spins forever, you are on the older browser callback flow. Stop
-that login and rerun without `--browser-login`; the default device-code login
-does not use the consent callback page. You can also inspect the state with:
+Run this first:
 
 ```sh
 ccproxy doctor --profile chatgpt-subscription
 ```
 
-`chatgpt_auth_https: ... cloudflare_challenge` means the flow is blocked on the
-OpenAI/Codex web login step before any `localhost` callback happens, so the
-proxy has not received anything yet. Check browser extensions, privacy or ad
-blockers, and the system proxy or VPN, or use the default device-code login.
-`codex_callback_port_1455: busy` is only relevant to `--browser-login`; device
-code login does not use that port.
+Common findings:
 
-If ChatGPT login exits with `EADDRINUSE` on `127.0.0.1:1455`, another process
-already owns the Codex OAuth callback port. Newer `ccproxy` builds detect this
-before login and fall back to auth2api manual callback mode; paste the full
-`localhost:1455/auth/callback?...` URL from the browser if prompted.
+| Symptom | Meaning | Fix |
+| --- | --- | --- |
+| Claude Code says `Not logged in` | You ran `claude` directly, not through `ccproxy run`. | Use `ccproxy run -- -p "reply ccproxy-ok"`. |
+| Browser spins on Codex consent page | You are using the old browser callback flow. | Stop it and rerun without `--browser-login`. |
+| `codex_callback_port_1455: busy` | Another app owns the old callback port. | Device-code login ignores this. It only matters with `--browser-login`. |
+| API-key provider refuses to save | The required env var is missing. | Set `OPENAI_API_KEY`, `KIMI_API_KEY`, `ZHIPU_API_KEY`, or `MINIMAX_API_KEY`. |
+| Local custom adapter unreachable | `custom` is user-managed. | Start your adapter and verify its `base_url`. |
 
-## Config
+## Configuration
 
-Create a user config:
+Create or refresh the user config:
 
 ```sh
 ccproxy init
 ```
 
-Example profile:
+Minimal profile example:
 
 ```toml
 default_profile = "openai-key"
@@ -329,7 +227,8 @@ small = "gpt-4.1-nano"
 Profile types:
 
 - `openai-compatible`: translate Anthropic Messages to OpenAI Chat Completions.
-- `anthropic-compatible`: forward Anthropic Messages with auth/model mapping.
+- `anthropic-compatible`: forward Anthropic Messages with auth and model
+  mapping.
 - `external-adapter`: OpenAI-compatible wire shape. `chatgpt-subscription` is
   managed by `ccproxy`; `custom` is user-managed.
 
@@ -340,7 +239,7 @@ See [docs/providers.md](docs/providers.md) and
 
 ```sh
 python -m pip install -e .
-python -m unittest discover -s tests
+python -m unittest discover -s tests -v
 python -m compileall -q src tests scripts
 ```
 
