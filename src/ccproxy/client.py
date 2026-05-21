@@ -40,12 +40,16 @@ class UpstreamClient:
         if payload.get("stream"):
             stream = self._post_stream(_join_endpoint(self.profile.base_url, "chat/completions"), payload)
             model = select_model(body.get("model"), self.profile)
-            return StreamResult(status=200, media_type="text/event-stream", chunks=openai_stream_to_anthropic_sse(_openai_sse_json(stream), model))
+            return StreamResult(
+                status=200,
+                media_type="text/event-stream",
+                chunks=openai_stream_to_anthropic_sse(_openai_sse_json(stream), model, requested_tools=body.get("tools")),
+            )
 
         status, data = self._post_json(_join_endpoint(self.profile.base_url, "chat/completions"), payload)
         if status >= 400:
             return JsonResult(status=status, payload=data)
-        return JsonResult(status=status, payload=openai_to_anthropic(data, requested_model=body.get("model")))
+        return JsonResult(status=status, payload=openai_to_anthropic(data, requested_model=body.get("model"), requested_tools=body.get("tools")))
 
     def _anthropic_passthrough(self, body: dict[str, Any]) -> JsonResult | StreamResult:
         forwarded = dict(body)

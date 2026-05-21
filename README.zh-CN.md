@@ -138,6 +138,8 @@ ccproxy test --profile custom --claude
 | 现象 | 处理 |
 | --- | --- |
 | Claude Code 显示 `Not logged in` | 用 `ccproxy run` 启动，不要直接运行 `claude`。 |
+| `/skills` 显示没有 skills | 更新 `ccproxy` 并重新通过 `ccproxy run` 启动 Claude；普通运行会保留 Claude 的插件和 skill 加载。`--bare` 只用于最小 smoke test。 |
+| 工具调用报 `Invalid tool parameters` | 更新 `ccproxy`；新版会在转发给 Claude Code 前校验工具调用参数。 |
 | API key 设置直接退出 | 更新 `ccproxy`；新版会等待你粘贴并保存 key。 |
 | 浏览器 consent 页面一直转圈 | 停止这次运行，使用默认 ChatGPT device-code 登录，不带 `--browser-login`。 |
 | MiniMax 菜单出现太多协议选项 | 更新 `ccproxy`；普通菜单已经隐藏高级 Anthropic-compatible profile。 |

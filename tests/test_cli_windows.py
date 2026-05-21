@@ -11,10 +11,10 @@ class WindowsCliTests(unittest.TestCase):
             with patch("ccproxy.cli._find_claude", return_value="C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd"):
                 self.assertEqual(
                     _claude_command(["--", "claude", "-p", "ping"]),
-                    ["C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd", "--bare", "-p", "ping"],
+                    ["C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd", "-p", "ping"],
                 )
 
-    def test_does_not_duplicate_bare_mode(self) -> None:
+    def test_preserves_explicit_bare_mode(self) -> None:
         with patch("ccproxy.cli.platform.system", return_value="Windows"):
             with patch("ccproxy.cli._find_claude", return_value="C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd"):
                 self.assertEqual(
@@ -29,7 +29,7 @@ class WindowsCliTests(unittest.TestCase):
         with patch("ccproxy.cli._find_claude", return_value="claude"):
             self.assertEqual(
                 _claude_command(["--", "-p", "reply ccproxy-ok"]),
-                ["claude", "--bare", "-p", "reply ccproxy-ok"],
+                ["claude", "-p", "reply ccproxy-ok"],
             )
 
 

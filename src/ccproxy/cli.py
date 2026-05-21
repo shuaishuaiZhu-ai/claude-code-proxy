@@ -43,7 +43,7 @@ from .config import (
     validate_model_name,
     write_default_config,
 )
-from .env import build_claude_env, ensure_bare_args
+from .env import build_claude_env
 from .provider_setup import provider_key_missing, provider_setup_message, setup_for_profile
 from .server import build_stdlib_server, serve_stdlib
 from .secrets import get_api_key, save_api_key
@@ -611,19 +611,19 @@ def _claude_command(raw_args: list[str]) -> list[str]:
         claude = _find_claude()
         if not claude:
             raise RuntimeError("Claude Code CLI was not found on PATH")
-        return ensure_bare_args([claude, *args])
+        return [claude, *args]
     if args:
         if platform.system().lower() == "windows" and args[0].lower() == "claude":
             claude = _find_claude()
             if claude:
-                return ensure_bare_args([claude, *args[1:]])
+                return [claude, *args[1:]]
         if _is_claude_executable(args[0]):
-            return ensure_bare_args(args)
+            return args
         return args
     claude = _find_claude()
     if not claude:
         raise RuntimeError("Claude Code CLI was not found on PATH")
-    return ensure_bare_args([claude])
+    return [claude]
 
 
 def _is_claude_executable(command: str) -> bool:

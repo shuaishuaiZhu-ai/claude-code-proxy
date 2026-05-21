@@ -89,6 +89,39 @@ class TranslatorTests(unittest.TestCase):
         self.assertEqual(payload["content"][0]["name"], "echo")
         self.assertEqual(payload["usage"]["input_tokens"], 2)
 
+    def test_invalid_tool_call_missing_required_input_is_not_forwarded(self) -> None:
+        payload = openai_to_anthropic(
+            {
+                "id": "chatcmpl_1",
+                "model": "gpt-test",
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {"id": "call_1", "type": "function", "function": {"name": "PowerShell", "arguments": "{}"}}
+                            ],
+                        },
+                    }
+                ],
+            },
+            requested_tools=[
+                {
+                    "name": "PowerShell",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {"command": {"type": "string"}},
+                        "required": ["command"],
+                    },
+                }
+            ],
+        )
+        self.assertEqual(payload["stop_reason"], "end_turn")
+        self.assertEqual(payload["content"][0]["type"], "text")
+        self.assertIn("missing required parameter(s): command", payload["content"][0]["text"])
+
     def test_openai_stream_to_anthropic_sse(self) -> None:
         chunks = [
             {"choices": [{"delta": {"content": "ccproxy"}, "finish_reason": None}]},
@@ -98,6 +131,40 @@ class TranslatorTests(unittest.TestCase):
         self.assertIn("event: message_start", raw)
         self.assertIn("ccproxy", raw)
         self.assertIn("event: message_stop", raw)
+
+    def test_invalid_stream_tool_call_missing_required_input_is_not_forwarded(self) -> None:
+        chunks = [
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {"index": 0, "id": "call_1", "function": {"name": "PowerShell", "arguments": "{}"}}
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            }
+        ]
+        raw = b"".join(
+            openai_stream_to_anthropic_sse(
+                chunks,
+                "test-model",
+                requested_tools=[
+                    {
+                        "name": "PowerShell",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {"command": {"type": "string"}},
+                            "required": ["command"],
+                        },
+                    }
+                ],
+            )
+        ).decode("utf-8")
+        self.assertIn("missing required parameter(s): command", raw)
+        self.assertNotIn('"type": "tool_use"', raw)
 
 
 if __name__ == "__main__":

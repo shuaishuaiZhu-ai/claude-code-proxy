@@ -142,6 +142,8 @@ ccproxy test --profile custom --claude
 | Symptom | Fix |
 | --- | --- |
 | Claude Code says `Not logged in` | Run through `ccproxy run`, not plain `claude`. |
+| `/skills` shows no skills | Update `ccproxy` and restart Claude through `ccproxy run`; normal runs keep Claude's plugin and skill loading enabled. Use `--bare` only for minimal smoke tests. |
+| Tool calls fail with `Invalid tool parameters` | Update `ccproxy`; current builds validate tool-call inputs before forwarding them to Claude Code. |
 | API key setup exits early | Update `ccproxy`; current builds ask you to paste and save the key. |
 | Browser consent page spins | Stop that run and use default ChatGPT device-code login without `--browser-login`. |
 | MiniMax menu shows too many protocol choices | Update `ccproxy`; the normal menu hides advanced Anthropic-compatible profiles. |

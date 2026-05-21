@@ -62,7 +62,11 @@ def anthropic_to_openai(body: dict[str, Any], profile: ProviderProfile) -> dict[
     return payload
 
 
-def openai_to_anthropic(data: dict[str, Any], requested_model: str | None = None) -> dict[str, Any]:
+def openai_to_anthropic(
+    data: dict[str, Any],
+    requested_model: str | None = None,
+    requested_tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     choices = data.get("choices") or []
     choice = choices[0] if choices else {}
     message = choice.get("message") or {}
@@ -81,6 +85,10 @@ def openai_to_anthropic(data: dict[str, Any], requested_model: str | None = None
             parsed_arguments = json.loads(arguments)
         except json.JSONDecodeError:
             parsed_arguments = {"raw_arguments": arguments}
+        validation_error = _tool_input_error(function.get("name", ""), parsed_arguments, requested_tools)
+        if validation_error:
+            content_blocks.append({"type": "text", "text": validation_error})
+            continue
         content_blocks.append(
             {
                 "type": "tool_use",
@@ -106,7 +114,11 @@ def openai_to_anthropic(data: dict[str, Any], requested_model: str | None = None
     }
 
 
-def openai_stream_to_anthropic_sse(chunks: Iterable[dict[str, Any]], model: str) -> Iterator[bytes]:
+def openai_stream_to_anthropic_sse(
+    chunks: Iterable[dict[str, Any]],
+    model: str,
+    requested_tools: list[dict[str, Any]] | None = None,
+) -> Iterator[bytes]:
     yield _sse(
         "message_start",
         {
@@ -174,6 +186,10 @@ def openai_stream_to_anthropic_sse(chunks: Iterable[dict[str, Any]], model: str)
             tool_input = json.loads(arguments)
         except json.JSONDecodeError:
             tool_input = {"raw_arguments": arguments}
+        validation_error = _tool_input_error(state.get("name") or "", tool_input, requested_tools)
+        if validation_error:
+            yield from _text_block_sse(index, validation_error)
+            continue
         yield _sse(
             "content_block_start",
             {
@@ -316,6 +332,32 @@ def _tool_to_openai(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _tool_input_error(tool_name: str, tool_input: Any, requested_tools: list[dict[str, Any]] | None) -> str | None:
+    if not requested_tools:
+        return None
+    schema = _tool_schema(tool_name, requested_tools)
+    if not schema:
+        return None
+    required = schema.get("required") or []
+    if not required:
+        return None
+    if not isinstance(tool_input, dict):
+        return f"Skipped invalid tool call `{tool_name}`: input must be a JSON object."
+    missing = [field for field in required if field not in tool_input or tool_input[field] in (None, "")]
+    if not missing:
+        return None
+    fields = ", ".join(str(field) for field in missing)
+    return f"Skipped invalid tool call `{tool_name}`: missing required parameter(s): {fields}."
+
+
+def _tool_schema(tool_name: str, requested_tools: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for tool in requested_tools:
+        if tool.get("name") == tool_name:
+            schema = tool.get("input_schema")
+            return schema if isinstance(schema, dict) else None
+    return None
+
+
 def _tool_choice_to_openai(tool_choice: Any) -> Any:
     if tool_choice is None:
         return None
@@ -353,3 +395,15 @@ def _finish_reason_to_stop_reason(reason: str | None, content_blocks: list[dict[
 
 def _sse(event: str, data: dict[str, Any]) -> bytes:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
+def _text_block_sse(index: int, text: str) -> Iterator[bytes]:
+    yield _sse(
+        "content_block_start",
+        {"type": "content_block_start", "index": index, "content_block": {"type": "text", "text": ""}},
+    )
+    yield _sse(
+        "content_block_delta",
+        {"type": "content_block_delta", "index": index, "delta": {"type": "text_delta", "text": text}},
+    )
+    yield _sse("content_block_stop", {"type": "content_block_stop", "index": index})
