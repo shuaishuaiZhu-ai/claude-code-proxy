@@ -207,6 +207,20 @@ Smoke test through the same script:
 powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 -Prompt "reply ccproxy-ok"
 ```
 
+Windows `.cmd` shortcuts:
+
+```cmd
+scripts\chatgpt-doctor.cmd
+scripts\chatgpt-smoke.cmd
+scripts\chatgpt-run.cmd
+```
+
+For a local fake adapter test only:
+
+```cmd
+scripts\mock-adapter.cmd
+```
+
 ### MiniMax
 
 OpenAI-compatible endpoints:
