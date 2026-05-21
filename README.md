@@ -190,6 +190,19 @@ http://127.0.0.1:8000/v1/chat/completions
 ChatGPT Plus/Pro/Team subscriptions and OpenAI API billing are separate product
 surfaces. `ccproxy` does not turn a ChatGPT subscription into an OpenAI API key.
 
+On Windows, the helper script wires Claude Code to a local ChatGPT subscription
+adapter:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 -AdapterBaseUrl "http://127.0.0.1:8000/v1"
+```
+
+Smoke test through the same script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_chatgpt_subscription.ps1 -Prompt "reply ccproxy-ok"
+```
+
 ### MiniMax
 
 OpenAI-compatible endpoints:
