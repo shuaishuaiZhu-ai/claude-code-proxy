@@ -151,6 +151,7 @@ ccproxy test --profile custom --claude
 
 ## Links
 
+- Wiki: [wiki/Home.md](wiki/Home.md)
 - Provider details: [docs/providers.md](docs/providers.md)
 - Architecture notes: [docs/architecture.md](docs/architecture.md)
 - Example config: [examples/ccproxy.example.toml](examples/ccproxy.example.toml)

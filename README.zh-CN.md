@@ -147,6 +147,7 @@ ccproxy test --profile custom --claude
 
 ## 相关文档
 
+- 项目 Wiki：[wiki/Home.md](wiki/Home.md)
 - Provider 细节：[docs/providers.md](docs/providers.md)
 - 架构说明：[docs/architecture.md](docs/architecture.md)
 - 配置示例：[examples/ccproxy.example.toml](examples/ccproxy.example.toml)
