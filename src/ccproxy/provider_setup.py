@@ -14,6 +14,8 @@ class ProviderSetup:
     url: str
 
 
+# Legacy mapping retained for backward compatibility. Profiles should
+# instead specify ``setup_label`` and ``setup_url`` on the ProviderProfile.
 API_KEY_SETUP: dict[str, ProviderSetup] = {
     "openai-key": ProviderSetup("OpenAI API keys", "https://platform.openai.com/api-keys"),
     "openai": ProviderSetup("OpenAI API keys", "https://platform.openai.com/api-keys"),
@@ -35,6 +37,15 @@ def provider_key_missing(profile: ProviderProfile, environ: Mapping[str, str] | 
 
 
 def setup_for_profile(profile: ProviderProfile) -> ProviderSetup | None:
+    """Return setup information for a provider.
+
+    If the profile defines ``setup_url``, return a ProviderSetup with the optional
+    ``setup_label`` or the profile name as the label. Otherwise consult the
+    legacy ``API_KEY_SETUP`` mapping for backwards compatibility.
+    """
+    if profile.setup_url:
+        return ProviderSetup(profile.setup_label or profile.name, profile.setup_url)
+    # Fall back to the legacy map if present
     return API_KEY_SETUP.get(profile.name)
 
 

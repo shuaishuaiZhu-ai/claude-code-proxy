@@ -22,6 +22,24 @@ class ServerConfig:
 
 @dataclass(frozen=True)
 class ProviderProfile:
+    """
+    Describe how to call a particular upstream provider.
+
+    Fields:
+
+    - **name**: CLI identifier for the provider (e.g. ``openai-key``).
+    - **type**: Protocol category used to select a translator (e.g. ``openai-compatible``).
+    - **base_url**: Upstream API base URL (no trailing slash).
+    - **api_key_env**: Name of the environment variable used to read an API key. Leave empty for profiles that do not use a key.
+    - **models**: Mapping of Anthropic model names to upstream model names. Keys ``big``, ``middle`` and ``small`` are used as defaults; other names may override them.
+    - **headers**: Additional HTTP headers sent on each request. Typically used to set ``Authorization`` for external adapters.
+    - **upstream_model**: Optional override of the model name used for the current call. This field is set dynamically by ``ccproxy model set``.
+    - **setup_label**: Optional human‑readable label for where to obtain an API key.
+    - **setup_url**: Optional URL directing the user to obtain an API key. If set, ``ccproxy model set`` may open this URL.
+    - **managed_adapter**: Optional name of a managed adapter required for this profile (e.g. ``auth2api``). ``None`` if no adapter is needed.
+    - **hidden**: If ``True``, the profile is considered internal and is not shown in ``ccproxy profiles`` by default.
+    """
+
     name: str
     type: str
     base_url: str
@@ -29,11 +47,17 @@ class ProviderProfile:
     models: dict[str, str] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     upstream_model: str | None = None
+    setup_label: str | None = None
+    setup_url: str | None = None
+    managed_adapter: str | None = None
+    hidden: bool = False
 
     def with_name(self, name: str) -> "ProviderProfile":
+        """Return a copy of this profile with a new name."""
         return replace(self, name=name)
 
     def with_upstream_model(self, model: str | None) -> "ProviderProfile":
+        """Return a copy of this profile with the given upstream model override."""
         return replace(self, upstream_model=validate_model_name(model) if model else None)
 
 
@@ -140,6 +164,10 @@ def provider_from_mapping(name: str, data: dict[str, Any]) -> ProviderProfile:
         api_key_env=str(data.get("api_key_env", "")),
         models={str(k): str(v) for k, v in models.items()},
         headers={str(k): str(v) for k, v in headers.items()},
+        setup_label=data.get("setup_label"),
+        setup_url=data.get("setup_url"),
+        managed_adapter=data.get("managed_adapter"),
+        hidden=bool(data.get("hidden", False)),
     )
 
 

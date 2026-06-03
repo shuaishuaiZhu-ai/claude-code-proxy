@@ -14,6 +14,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "gpt-4.1-mini",
             "small": "gpt-4.1-nano",
         },
+        setup_label="OpenAI API keys",
+        setup_url="https://platform.openai.com/api-keys",
     ),
     "openai": ProviderProfile(
         name="openai",
@@ -25,6 +27,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "gpt-4.1-mini",
             "small": "gpt-4.1-nano",
         },
+        setup_label="OpenAI API keys",
+        setup_url="https://platform.openai.com/api-keys",
     ),
     "chatgpt-subscription": ProviderProfile(
         name="chatgpt-subscription",
@@ -39,6 +43,7 @@ PRESETS: dict[str, ProviderProfile] = {
             "ChatGPT5.4": "gpt-5.4",
         },
         headers={"Authorization": "Bearer ccproxy-local"},
+        managed_adapter="auth2api",
     ),
     "deepseek": ProviderProfile(
         name="deepseek",
@@ -52,6 +57,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "deepseek-chat": "deepseek-chat",
             "deepseek-reasoner": "deepseek-reasoner",
         },
+        setup_label="DeepSeek API keys",
+        setup_url="https://platform.deepseek.com/api_keys",
     ),
     "deepseek-subscription": ProviderProfile(
         name="deepseek-subscription",
@@ -64,6 +71,7 @@ PRESETS: dict[str, ProviderProfile] = {
             "small": "deepseek-v4-flash",
         },
         headers={"Authorization": "Bearer ccproxy-local"},
+        managed_adapter=None,
     ),
     "kimi": ProviderProfile(
         name="kimi",
@@ -75,6 +83,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "moonshot-v1-32k",
             "small": "moonshot-v1-8k",
         },
+        setup_label="Kimi Open Platform console",
+        setup_url="https://platform.kimi.com/console/api-keys",
     ),
     "kimi-subscription": ProviderProfile(
         name="kimi-subscription",
@@ -87,6 +97,7 @@ PRESETS: dict[str, ProviderProfile] = {
             "small": "moonshot-v1-8k",
         },
         headers={"Authorization": "Bearer ccproxy-local"},
+        managed_adapter=None,
     ),
     "zhipu": ProviderProfile(
         name="zhipu",
@@ -98,6 +109,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "glm-4-air",
             "small": "glm-4-flash",
         },
+        setup_label="Zhipu BigModel API keys",
+        setup_url="https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
     ),
     "zhipu-subscription": ProviderProfile(
         name="zhipu-subscription",
@@ -110,6 +123,7 @@ PRESETS: dict[str, ProviderProfile] = {
             "small": "glm-4-flash",
         },
         headers={"Authorization": "Bearer ccproxy-local"},
+        managed_adapter=None,
     ),
     "minimax-cn": ProviderProfile(
         name="minimax-cn",
@@ -121,6 +135,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "MiniMax-M2.7-highspeed",
             "small": "MiniMax-M2.5",
         },
+        setup_label="MiniMax China API keys",
+        setup_url="https://platform.minimaxi.com/user-center/basic-information/interface-key",
     ),
     "minimax-global": ProviderProfile(
         name="minimax-global",
@@ -132,6 +148,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "MiniMax-M2.7-highspeed",
             "small": "MiniMax-M2.5",
         },
+        setup_label="MiniMax Global API keys",
+        setup_url="https://platform.minimax.io/user-center/basic-information/interface-key",
     ),
     "minimax-subscription": ProviderProfile(
         name="minimax-subscription",
@@ -143,6 +161,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "MiniMax-M2.7-highspeed",
             "small": "MiniMax-M2.5",
         },
+        setup_label="MiniMax Token Plan key",
+        setup_url="https://platform.minimaxi.com/user-center/basic-information/interface-key",
     ),
     "minimax-cn-anthropic": ProviderProfile(
         name="minimax-cn-anthropic",
@@ -154,6 +174,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "MiniMax-M2.7-highspeed",
             "small": "MiniMax-M2.5",
         },
+        setup_label="MiniMax China API keys",
+        setup_url="https://platform.minimaxi.com/user-center/basic-information/interface-key",
     ),
     "minimax-global-anthropic": ProviderProfile(
         name="minimax-global-anthropic",
@@ -165,6 +187,8 @@ PRESETS: dict[str, ProviderProfile] = {
             "middle": "MiniMax-M2.7-highspeed",
             "small": "MiniMax-M2.5",
         },
+        setup_label="MiniMax Global API keys",
+        setup_url="https://platform.minimax.io/user-center/basic-information/interface-key",
     ),
     "custom": ProviderProfile(
         name="custom",

@@ -1,33 +1,33 @@
 # claude-code-proxy
 
-**Run Claude Code through the provider you already use.**
+**Use Claude Code with your existing AI provider.**
 
+<!-- Maintain links for both languages -->
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-![claude-code-proxy routes Claude Code through a local proxy to multiple provider types](docs/assets/readme-hero-generated.png)
+<!-- Hero image with alt text explaining the concept -->
+![An abstract diagram showing a local machine connecting to various AI providers through a central proxy hub](docs/assets/readme-hero-new.png)
 
-`claude-code-proxy` (`ccproxy`) starts a local Anthropic-compatible proxy for
-Claude Code. Pick a provider once, then run Claude Code through the same local
-entry point whether your upstream is an OpenAI API key, a ChatGPT subscription,
-DeepSeek, Kimi, Zhipu GLM, MiniMax, or your own OpenAI-compatible adapter.
+Claude Code speaks the Anthropic Messages API. Many AI providers—like OpenAI, DeepSeek, Kimi, Zhipu and MiniMax—speak the OpenAI Chat Completions API, and a ChatGPT subscription only works through a browser. `claude-code-proxy` (`ccproxy`) runs a local sidecar that translates between them so you can continue using Claude Code without changing your workflow. You keep your API keys and tokens on your machine; ccproxy routes the requests through the provider you choose.
 
-The day-to-day workflow is intentionally small:
+### Why ccproxy?
 
-```sh
-ccproxy model set
-ccproxy run -- -p "reply ccproxy-ok"
-```
+Use ccproxy when you already have an AI account or key and want to take advantage of Claude Code without reconfiguring your environment. ccproxy lets you:
 
-Claude Code still runs locally. Its tools, plugins, skills, and MCP setup stay
-available unless you deliberately pass Claude Code flags that disable them.
+* Pick a provider once and continue using Claude Code’s tools and plugins as usual.
+* Keep API keys and subscription tokens local — ccproxy never uploads them.
+* Translate between Anthropic and OpenAI request formats seamlessly.
+* Support multiple providers and switch between them with a single command.
 
-## 30-second quickstart
+## Quick start in 30 seconds
+
+PyPI publishing is not yet available. To install from source and test the connection:
 
 ```sh
 git clone https://github.com/shuaishuaiZhu-ai/claude-code-proxy.git
 cd claude-code-proxy
-sh scripts/install.sh
-ccproxy model set
+sh scripts/install.sh        # for macOS, Linux or WSL
+ccproxy model set            # choose your provider and paste a key when prompted
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
@@ -41,114 +41,54 @@ ccproxy model set
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-If the response contains `ccproxy-ok`, the proxy path is working. PyPI
-publishing is not available yet, so installation is currently from a git clone.
+If you see `ccproxy-ok` in the output, the proxy path is working. The install scripts accept flags such as `--with-server` and `--no-init`; see `scripts/install.sh` and `scripts/install.ps1` for details.
 
-## Choose one provider path
+## Choose your provider
 
-![Multiple provider types flow into one local ccproxy router](docs/assets/readme-provider-switching.png)
+Pick a profile based on the account or API key you already have. To see all available profiles run `ccproxy profiles` or `ccproxy profiles --all`.
 
-| What you already have | Choose this profile | Notes |
+| What you already have | Profile name | Notes |
 | --- | --- | --- |
-| OpenAI API key | `openai-key` | Uses `OPENAI_API_KEY` or a pasted key saved by `ccproxy model set`. |
-| ChatGPT subscription | `chatgpt-subscription` | Managed local adapter. Requires Node.js 20+ and git. |
-| DeepSeek API key | `deepseek` | OpenAI-compatible endpoint. |
-| Kimi / Moonshot API key | `kimi` | OpenAI-compatible endpoint. |
-| Zhipu GLM API key | `zhipu` | OpenAI-compatible endpoint. |
+| OpenAI API key | `openai-key` | Uses the `OPENAI_API_KEY` environment variable or a pasted key saved by `ccproxy model set`. |
+| ChatGPT subscription | `chatgpt-subscription` | Managed local adapter. Requires Node.js 20+ and git. The subscription token stays local in your browser session. |
+| DeepSeek (Moonshot) API key | `deepseek` | OpenAI‑compatible endpoint. |
+| Kimi API key | `kimi` | OpenAI‑compatible endpoint. |
+| Zhipu GLM API key | `zhipu` | OpenAI‑compatible endpoint. |
 | MiniMax API key | `minimax-cn` or `minimax-global` | Pick the region matching your account. |
-| Your own local adapter | `custom` | Defaults to `http://127.0.0.1:8000/v1`. |
+| Self‑hosted adapter | `custom` | Defaults to `http://127.0.0.1:8000/v1`; change with `--base-url`. |
 
-Useful commands:
-
-```sh
-ccproxy profiles
-ccproxy profiles --all
-ccproxy model set --provider deepseek --model deepseek-v4-pro
-ccproxy model current
-ccproxy model clear
-```
-
-For the complete provider list and setup URLs, see
-[docs/providers.md](docs/providers.md).
-
-## Install and uninstall
-
-Requirements:
-
-- Python 3.11+
-- `pip`
-- Claude Code CLI on `PATH`
-- Node.js 20+ and git only if you use `chatgpt-subscription`
-
-macOS, Linux, and WSL:
+Examples:
 
 ```sh
-sh scripts/install.sh
-sh scripts/install.sh --with-server
-sh scripts/install.sh --no-init
-```
-
-Windows PowerShell:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 -WithServer
-```
-
-The install scripts run `pip install -e .` and initialize `~/.ccproxy` unless
-you pass the no-init option.
-
-Uninstall:
-
-```sh
-sh scripts/uninstall.sh
-sh scripts/uninstall.sh --keep-state
-```
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
-```
-
-Uninstalling ccproxy does not remove Python, pip, Node.js, git, or Claude Code.
-
-## Run Claude Code through ccproxy
-
-Everything after `--` is passed to Claude Code:
-
-```sh
-ccproxy run -- -p "summarize this repository"
-ccproxy run -- --model sonnet -p "reply ccproxy-ok"
+ccproxy model set --provider openai-key --model gpt-4-turbo
+ccproxy model current        # show the active provider and model
+ccproxy model clear          # remove the saved key or subscription
 ccproxy run --profile kimi --upstream-model moonshot-v1-128k -- -p "explain this file"
 ```
 
-`ccproxy run` starts a local proxy, sets `ANTHROPIC_BASE_URL` for the child
-Claude Code process, waits for Claude Code to exit, then shuts the proxy down.
+For a complete list of providers and model names see [docs/providers.md](docs/providers.md).
 
-Default proxy port: `8082`.
+## Everyday usage
 
-```sh
-ccproxy run --port 8090 -- -p "reply ccproxy-ok"
-```
-
-You can also serve only the proxy:
+Once a profile is configured, run Claude Code through ccproxy:
 
 ```sh
-ccproxy serve --profile custom --port 8090
+ccproxy run -- -p "summarize this repository"
+ccproxy run -- --model sonnet -p "reply ccproxy-ok"    # specify the Anthropic model for Claude Code
+ccproxy serve --profile custom --port 8090              # expose only the proxy and call from another process
 ```
+
+`ccproxy run` launches a local proxy on port 8082 (configurable), sets `ANTHROPIC_BASE_URL` for the child Claude Code process, waits for Claude Code to exit and then shuts down the proxy.
+
+### ChatGPT subscription
+
+The `chatgpt-subscription` profile uses a managed adapter that logs in through your browser or device code. It does **not** convert your ChatGPT subscription into an OpenAI Platform API key. You need Node.js 20+, git and a browser. Running `ccproxy model set --provider chatgpt-subscription` will guide you through the login process. The token stays on your machine and is never printed or uploaded.
 
 ## Local security boundary
 
-![API keys and subscription tokens stay inside the local machine boundary while ccproxy routes requests outward](docs/assets/readme-local-security.png)
+![A diagram showing that API keys and subscription tokens remain within the local machine while requests are sent to the provider](docs/assets/local-security-diagram-new.png)
 
-ccproxy is designed as a local sidecar:
-
-- The proxy listens on `127.0.0.1` by default.
-- API keys can come from environment variables such as `OPENAI_API_KEY`.
-- Pasted keys are saved under `~/.ccproxy/secrets.toml`.
-- `ccproxy doctor` reports whether keys are present, but does not print key values.
-- ChatGPT subscription mode uses your browser login through a managed local adapter; it does not turn a ChatGPT subscription into an OpenAI Platform API key.
-
-For the full boundary, see [SECURITY.md](SECURITY.md).
+ccproxy is designed as a local sidecar. The proxy listens on `127.0.0.1` by default. API keys can come from environment variables or be pasted into the setup prompt and are stored in `~/.ccproxy/secrets.toml`. `ccproxy doctor` tells you whether keys are present but never prints their values. When using a ChatGPT subscription the managed adapter keeps your login token in your browser profile. For more information see [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
 
@@ -159,17 +99,19 @@ ccproxy doctor
 ccproxy doctor --profile chatgpt-subscription
 ```
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| Claude Code says `Not logged in` | You ran plain `claude`, not `ccproxy run`. | Run `ccproxy run -- ...` so `ANTHROPIC_BASE_URL` is set. |
-| `/skills` appears empty | Claude Code was launched with `--bare`. | Remove `--bare` for normal use. |
-| API key setup exits immediately | Empty key was pasted. | Run `ccproxy model set` again and paste the actual key. |
-| Browser consent page hangs | Browser callback flow is blocked. | Use the default device-code login; do not pass `--browser-login`. |
-| Adapter unreachable | A local subscription adapter is not running. | Run `ccproxy model set`, start the adapter, or switch to an API-key profile. |
-| Port conflict | The proxy or callback port is already in use. | Pass `--port` for the proxy, or close the process using the callback port. |
-| PowerShell blocks scripts | Local execution policy. | Use `-ExecutionPolicy Bypass` for the install/uninstall script. |
+Common symptoms and fixes:
 
-Try ccproxy without a real provider:
+| Symptom | Likely cause | How to fix |
+| --- | --- | --- |
+| Claude Code prints `Not logged in` | You ran `claude` directly and `ANTHROPIC_BASE_URL` was not set. | Use `ccproxy run -- …` so the environment is configured. |
+| `/skills` appears empty | Claude Code was started with `--bare`, disabling tools. | Remove the `--bare` flag for normal use. |
+| Key setup exits immediately | You pressed enter without pasting a key. | Run `ccproxy model set` again and paste the actual key. |
+| Browser consent page hangs | The browser callback is blocked or popped up in the wrong tab. | Use the default device‑code login; avoid using `--browser-login` unless you know it works. |
+| Adapter unreachable | The local subscription adapter is not running. | Run `ccproxy model set`, start the adapter, or switch to an API-key profile. |
+| Port conflict | Another service is using the proxy or callback port. | Pass `--port` to choose a different port or close the conflicting process. |
+| PowerShell blocks scripts | Execution policy is too restrictive. | Use `-ExecutionPolicy Bypass` when running the install/uninstall scripts. |
+
+You can experiment without a real provider by using a mock:
 
 ```sh
 python scripts/mock_openai_provider.py --port 8000
@@ -177,55 +119,16 @@ ccproxy model set --provider custom --model custom-big
 ccproxy run -- -p "reply ccproxy-ok"
 ```
 
-## How it works
+## Learn more
 
-Claude Code speaks the Anthropic Messages API. Most non-Anthropic providers
-speak OpenAI Chat Completions or expose a local adapter. ccproxy translates
-requests and responses between those shapes, including streaming and tool-call
-payloads.
+ccproxy is small by design. It translates between Anthropic Messages and OpenAI Chat Completions (including streaming and tool calls) and launches managed adapters for providers that require them.
 
-For implementation details, read:
-
-- [docs/architecture.md](docs/architecture.md)
-- [wiki/Architecture.md](wiki/Architecture.md)
-- [wiki/Providers-And-Models.md](wiki/Providers-And-Models.md)
-- [wiki/Testing.md](wiki/Testing.md)
+- **Architecture**: [docs/architecture.md](docs/architecture.md) describes the system context, module boundaries, request translation pipeline, provider profile model, adapter lifecycle and extension points.
+- **Providers**: [docs/providers.md](docs/providers.md) lists supported providers, setup URLs and model names.
+- **Testing**: [wiki/Testing.md](wiki/Testing.md) covers test suites and how to run them.
+- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting issues and pull requests.
+- **Roadmap and technical debt**: [docs/architecture-review.md](docs/architecture-review.md) outlines current limitations and planned improvements.
 
 ## Contributing
 
-The core code is small and has no required runtime dependencies beyond the
-standard library. FastAPI and uvicorn are optional extras for server mode.
-
-Common entry points:
-
-| Goal | Start here |
-| --- | --- |
-| Add a built-in provider | `src/ccproxy/presets.py`, `src/ccproxy/provider_setup.py`, `tests/test_provider_setup.py` |
-| Fix request/response translation | `src/ccproxy/translator.py`, `tests/test_translator.py` |
-| Improve ChatGPT subscription adapter behavior | `src/ccproxy/adapter.py`, `tests/test_adapter.py` |
-| Improve CLI behavior | `src/ccproxy/cli.py`, `tests/test_cli.py` |
-
-Before opening a PR:
-
-```sh
-python -m pip install -e .
-python -m unittest discover -s tests
-python -m compileall -q src tests scripts
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and
-[docs/architecture-review.md](docs/architecture-review.md) for the current
-technical-debt map.
-
-## Roadmap
-
-- Publish to PyPI.
-- Add CI coverage for Windows, macOS, and Linux.
-- Pin the managed `auth2api` adapter to a tagged release or commit.
-- Add structured logging with debug and quiet modes.
-- Add `ccproxy doctor --fix`.
-- Add optional keyring-backed secret storage.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+Pull requests are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to learn about our coding standards, how to run the test suite and how to get involved. We maintain a dual‑language README and check for parity between `README.md` and `README.zh-CN.md` on each change.
